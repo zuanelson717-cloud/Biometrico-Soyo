@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "Employee": {
+      "title": "Employee",
+      "description": "Employee definition",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "biometricId": { "type": "string" },
+        "nip": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "department": { "type": "string" },
+        "role": { "type": "string" },
+        "photoUrl": { "type": "string" }
+      },
+      "required": ["name", "email", "biometricId", "nip"]
+    },
+    "TimeEntry": {
+      "title": "TimeEntry",
+      "description": "Time entry log definition",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["entry", "exit"] }
+      },
+      "required": ["employeeId", "timestamp", "type"]
+    }
+  },
+  "firestore": {
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Employee collection"
+    },
+    "/timeEntries/{entryId}": {
+      "schema": "TimeEntry",
+      "description": "Time entry logs collection"
+    }
+  }
+}
