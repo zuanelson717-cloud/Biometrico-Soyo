@@ -8,6 +8,7 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Employees from './components/Employees';
 import Reports from './components/Reports';
+import MonthlyReports from './components/MonthlyReports';
 import Cadastro from './components/Cadastro';
 import Settings from './components/Settings';
 
@@ -19,6 +20,7 @@ export default function App() {
       case 'dashboard': return <Dashboard />;
       case 'employees': return <Employees />;
       case 'reports': return <Reports />;
+      case 'monthly-reports': return <MonthlyReports />;
       case 'cadastro': return <Cadastro />;
       case 'settings': return <Settings />;
       default: return <Dashboard />;

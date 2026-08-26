@@ -10,7 +10,8 @@ export default function Sidebar({ activeView, setActiveView }: SidebarProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'employees', label: 'Funcionários', icon: Users },
-    { id: 'reports', label: 'Relatórios', icon: FileText },
+    { id: 'reports', label: 'Relatório Diário', icon: FileText },
+    { id: 'monthly-reports', label: 'Relatórios Mensais', icon: FileText },
     { id: 'cadastro', label: 'Cadastro', icon: UserPlus },
     { id: 'settings', label: 'Configurações', icon: Settings },
   ];

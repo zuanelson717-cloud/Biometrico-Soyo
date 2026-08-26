@@ -9,3 +9,18 @@
     }
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #report-table, #report-table * {
+    visibility: visible;
+  }
+  #report-table {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
