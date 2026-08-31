@@ -6,6 +6,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function MonthlyReports() {
+  const [activeTab, setActiveTab] = useState<'absences' | 'delays'>('absences');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [justifications, setJustifications] = useState<any[]>([]);
@@ -15,6 +16,9 @@ export default function MonthlyReports() {
   const [selectedEmployeeForAnnul, setSelectedEmployeeForAnnul] = useState<Employee | null>(null);
   const [selectedDaysForAnnul, setSelectedDaysForAnnul] = useState<string[]>([]);
   const [isResetting, setIsResetting] = useState(false);
+
+  const TARGET_START_TIME_HOUR = 8;
+  const WORK_DAY_MS = 8 * 60 * 60 * 1000;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -148,6 +152,7 @@ export default function MonthlyReports() {
     const daysInMonth = new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]), 0).getDate();
     let totalDurationMs = 0;
     let absences = 0;
+    let totalDelayMs = 0;
     
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${selectedMonth}-${day.toString().padStart(2, '0')}`;
@@ -166,6 +171,13 @@ export default function MonthlyReports() {
                     const inHour = earliestCheckIn.getHours();
                     if (inHour < 11) {
                         markedPresence = true;
+                    }
+                    
+                    // Calculate delay
+                    const targetTime = new Date(earliestCheckIn);
+                    targetTime.setHours(TARGET_START_TIME_HOUR, 0, 0, 0);
+                    if (earliestCheckIn > targetTime) {
+                        totalDelayMs += (earliestCheckIn.getTime() - targetTime.getTime());
                     }
                 }
 
@@ -191,7 +203,8 @@ export default function MonthlyReports() {
         }
     }
 
-    return { ...emp, totalDurationMs, absences };
+    const absencesFromDelays = Math.floor(totalDelayMs / WORK_DAY_MS);
+    return { ...emp, totalDurationMs, absences, totalDelayMs, absencesFromDelays };
   }).filter(e => e.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                  (e.nip && e.nip.toLowerCase().includes(searchQuery.toLowerCase())));
 
@@ -206,6 +219,10 @@ export default function MonthlyReports() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-6">Relatórios Mensais</h1>
+      <div className="flex mb-6 border-b">
+         <button onClick={() => setActiveTab('absences')} className={`p-4 ${activeTab === 'absences' ? 'border-b-2 border-blue-600 font-bold' : ''}`}>Faltas por Ausência</button>
+         <button onClick={() => setActiveTab('delays')} className={`p-4 ${activeTab === 'delays' ? 'border-b-2 border-blue-600 font-bold' : ''}`}>Faltas por Atraso</button>
+      </div>
       <div className="mb-6 flex gap-4">
         <input 
             type="month" 
@@ -226,40 +243,65 @@ export default function MonthlyReports() {
             {isResetting ? 'Resetando...' : 'Resetar Todas as Faltas'}
         </button>
       </div>
-      <table id="report-table" className="w-full text-left border-collapse bg-white shadow rounded-lg overflow-hidden">
-        <thead className="bg-slate-100">
-          <tr>
-            <th className="p-4">Funcionário</th>
-            <th className="p-4">NIP</th>
-            <th className="p-4">Carga Horária Total</th>
-            <th className="p-4">Faltas</th>
-          </tr>
-        </thead>
-        <tbody>
-          {processedData.map(e => (
-            <tr key={e.id} className="border-t">
-              <td className="p-4">{e.name}</td>
-              <td className="p-4">{e.nip || '-'}</td>
-              <td className="p-4">{formatMs(e.totalDurationMs)}</td>
-              <td className="p-4">
-                {e.absences === 0 ? (
-                    <span className="text-green-600 font-bold">Nenhuma</span>
-                ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-red-600 font-bold">{e.absences}</span>
-                      <button 
-                        onClick={() => setSelectedEmployeeForAnnul(e)}
-                        className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
-                      >
-                        Anular
-                      </button>
-                    </div>
-                )}
-              </td>
+      {activeTab === 'absences' ? (
+        <table id="report-table" className="w-full text-left border-collapse bg-white shadow rounded-lg overflow-hidden">
+            <thead className="bg-slate-100">
+            <tr>
+                <th className="p-4">Funcionário</th>
+                <th className="p-4">NIP</th>
+                <th className="p-4">Carga Horária Total</th>
+                <th className="p-4">Faltas</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+            {processedData.map(e => (
+                <tr key={e.id} className="border-t">
+                <td className="p-4">{e.name}</td>
+                <td className="p-4">{e.nip || '-'}</td>
+                <td className="p-4">{formatMs(e.totalDurationMs)}</td>
+                <td className="p-4">
+                    {e.absences === 0 ? (
+                        <span className="text-green-600 font-bold">Nenhuma</span>
+                    ) : (
+                        <div className="flex items-center gap-2">
+                        <span className="text-red-600 font-bold">{e.absences}</span>
+                        <button 
+                            onClick={() => setSelectedEmployeeForAnnul(e)}
+                            className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
+                        >
+                            Anular
+                        </button>
+                        </div>
+                    )}
+                </td>
+                </tr>
+            ))}
+            </tbody>
+        </table>
+      ) : (
+        <table id="report-table-delays" className="w-full text-left border-collapse bg-white shadow rounded-lg overflow-hidden">
+            <thead className="bg-slate-100">
+            <tr>
+                <th className="p-4">Funcionário</th>
+                <th className="p-4">NIP</th>
+                <th className="p-4">Atraso Acumulado</th>
+                <th className="p-4">Faltas por Atraso</th>
+            </tr>
+            </thead>
+            <tbody>
+            {processedData.map(e => (
+                <tr key={e.id} className="border-t">
+                <td className="p-4">{e.name}</td>
+                <td className="p-4">{e.nip || '-'}</td>
+                <td className="p-4">{formatMs(e.totalDelayMs)}</td>
+                <td className="p-4">
+                     <span className="text-red-600 font-bold">{e.absencesFromDelays}</span>
+                </td>
+                </tr>
+            ))}
+            </tbody>
+        </table>
+      )}
       {selectedEmployeeForAnnul && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-lg max-w-lg w-full">

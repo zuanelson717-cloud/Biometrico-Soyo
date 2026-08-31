@@ -31,10 +31,14 @@ export default function Reports() {
       if (!confirm(`Deseja apagar ${selectedForDeletion.length} registros de refeição selecionados?`)) return;
       try {
           console.log('Iniciando deleção dos IDs:', selectedForDeletion);
-          for (const id of selectedForDeletion) {
-              console.log('Tentando apagar documento:', id);
-              await deleteDoc(doc(db, 'attendance', id));
-              console.log('Documento apagado:', id);
+          // O set garante que IDs duplicados sejam deletados apenas uma vez
+          const uniqueIds = Array.from(new Set(selectedForDeletion));
+          for (const id of uniqueIds) {
+              if (id) {
+                console.log('Tentando apagar documento:', id);
+                await deleteDoc(doc(db, 'attendance', id));
+                console.log('Documento apagado:', id);
+              }
           }
           alert('Registros apagados com sucesso!');
           window.location.reload();
@@ -46,13 +50,13 @@ export default function Reports() {
 
   const toggleSelectForDeletion = (p: AttendancePair) => {
       const ids = [p.checkInId, p.checkOutId].filter(Boolean) as string[];
-      // Verifica se pelo menos um dos IDs do par já está selecionado
-      const isSelected = ids.some(id => selectedForDeletion.includes(id));
+      // Verifica se todos os IDs presentes no par já estão selecionados
+      const allSelected = ids.every(id => selectedForDeletion.includes(id));
       
       setSelectedForDeletion(prev => 
-          isSelected 
+          allSelected 
             ? prev.filter(id => !ids.includes(id)) 
-            : [...prev, ...ids]
+            : [...new Set([...prev, ...ids])]
       );
   };
 
@@ -303,8 +307,8 @@ export default function Reports() {
                   {activeTab === 'refeicao' ? (
                       e.lunchPairs.length > 0 ? (
                         e.lunchPairs.map((p, i) => {
-                            const pairId = p.checkInId; // Use checkInId as identifier
-                            const isSelected = selectedForDeletion.includes(pairId || '');
+                            const ids = [p.checkInId, p.checkOutId].filter(Boolean) as string[];
+                            const isSelected = ids.every(id => selectedForDeletion.includes(id));
                             return (
                                 <div key={i} className={`flex items-center gap-4 text-xs bg-slate-50 p-1.5 rounded border ${isSelected ? 'border-red-500' : 'border-slate-100'}`}>
                                   {isDeleteMode && (

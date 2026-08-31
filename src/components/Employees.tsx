@@ -109,7 +109,7 @@ export default function Employees() {
 
     try {
       console.log("Employees.tsx: Iniciando upload do arquivo:", tempPhotoFile.name);
-      const storageRef = ref(storage, `employees/${selectedEmployee.id}.jpeg`);
+      const storageRef = ref(storage, `employees/${selectedEmployee.email}.jpeg`);
       
       console.log("Employees.tsx: Chamando uploadBytes...");
       await uploadBytes(storageRef, tempPhotoFile);
