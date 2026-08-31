@@ -21,6 +21,8 @@ export default function Employees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [showPasswordCheckModal, setShowPasswordCheckModal] = useState(false);
+  const [passwordCheckInput, setPasswordCheckInput] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -394,7 +396,7 @@ export default function Employees() {
                 className="mt-2 w-full bg-amber-500 text-white py-2 rounded-lg hover:bg-amber-600 transition-colors"
                 onClick={() => {
                   setEditingEmployee(selectedEmployee);
-                  setShowAdminEditModal(true);
+                  setShowPasswordCheckModal(true);
                 }}
               >
                 Editar Funcionário
@@ -413,6 +415,47 @@ export default function Employees() {
         )}
 
 
+
+        {showPasswordCheckModal && editingEmployee && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm space-y-4">
+              <h2 className="text-xl font-bold mb-4 text-center">Senha do Funcionário</h2>
+              <input 
+                type="password" 
+                placeholder="Senha" 
+                value={passwordCheckInput} 
+                onChange={(e) => setPasswordCheckInput(e.target.value)} 
+                className="w-full p-2 border rounded" 
+              />
+              <div className="flex gap-4">
+                <button 
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                  onClick={() => {
+                    if (passwordCheckInput === editingEmployee.password) {
+                      setShowPasswordCheckModal(false);
+                      setShowEditModal(true);
+                      setPasswordCheckInput('');
+                    } else {
+                      alert('SENHA ERRADA');
+                    }
+                  }}
+                >
+                  Confirmar
+                </button>
+                <button 
+                  className="flex-1 bg-slate-200 text-slate-800 py-2 rounded-lg hover:bg-slate-300"
+                  onClick={() => {
+                    setShowPasswordCheckModal(false);
+                    setEditingEmployee(null);
+                    setPasswordCheckInput('');
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showEditModal && editingEmployee && (
           <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">

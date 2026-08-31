@@ -15,6 +15,7 @@ export default function MonthlyReports() {
   const [loading, setLoading] = useState(true);
   const [selectedEmployeeForAnnul, setSelectedEmployeeForAnnul] = useState<Employee | null>(null);
   const [selectedDaysForAnnul, setSelectedDaysForAnnul] = useState<string[]>([]);
+  const [selectedResetEmp, setSelectedResetEmp] = useState<string>('all');
   const [isResetting, setIsResetting] = useState(false);
 
   const TARGET_START_TIME_HOUR = 8;
@@ -22,15 +23,22 @@ export default function MonthlyReports() {
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      const employeesSnapshot = await getDocs(collection(db, 'employees'));
-      const attendanceSnapshot = await getDocs(collection(db, 'attendance'));
-      const justificationsSnapshot = await getDocs(collection(db, 'justifications'));
-      
-      setEmployees(employeesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee)));
-      setAttendance(attendanceSnapshot.docs.map(doc => ({ ...doc.data() } as Attendance)));
-      setJustifications(justificationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
+      try {
+        setLoading(true);
+        const [employeesSnapshot, attendanceSnapshot, justificationsSnapshot] = await Promise.all([
+            getDocs(collection(db, 'employees')),
+            getDocs(collection(db, 'attendance')),
+            getDocs(collection(db, 'justifications'))
+        ]);
+        
+        setEmployees(employeesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee)));
+        setAttendance(attendanceSnapshot.docs.map(doc => ({ ...doc.data() } as Attendance)));
+        setJustifications(justificationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
   }, []);
@@ -40,69 +48,133 @@ export default function MonthlyReports() {
     setJustifications(justificationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
   };
 
-  const handleAnnulAbsence = async (employeeId: string, date: string) => {
-    await addDoc(collection(db, 'justifications'), { employeeId, date, reason: 'Annulled' });
+  const handleAnnulRecord = async (employeeId: string, date: string) => {
+    const reason = activeTab === 'absences' ? 'Annulled' : 'AnnulledDelay';
+    await addDoc(collection(db, 'justifications'), { employeeId, date, reason });
     await refreshJustifications();
     setSelectedEmployeeForAnnul(null);
   };
 
-  const handleResetAllAbsences = async () => {
-    console.log("handleResetAllAbsences: Entrou na função");
-    // Removido o window.confirm temporariamente para teste
-    console.log("handleResetAllAbsences: Iniciando processo sem confirmação");
-    
-    setIsResetting(true);
-    console.log("Iniciando reset de faltas...");
-    console.log("Total de funcionários:", employees.length);
-    console.log("Total de registros de presença:", attendance.length);
-    console.log("Total de justificativas:", justifications.length);
+  const handleResetDelays = async () => {
+    if (!confirm(`Deseja resetar os atrasos de ${selectedResetEmp === 'all' ? 'todos os funcionários' : 'o funcionário selecionado'}?`)) return;
 
+    setIsResetting(true);
     const batch = writeBatch(db);
     const currentYear = new Date().getFullYear();
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date();
     let operationsCount = 0;
 
-    for (const emp of employees) {
+    const employeesToReset = selectedResetEmp === 'all' 
+        ? employees 
+        : employees.filter(e => e.id === selectedResetEmp);
+
+    for (const emp of employeesToReset) {
       const empAttendance = attendance.filter(a => a.employeeId === emp.id);
       
-      for (let date = new Date(`${currentYear}-01-01`); date <= new Date(); date.setDate(date.getDate() + 1)) {
+      let date = new Date(`${currentYear}-01-01`);
+      while (date <= today) {
         const dateStr = date.toISOString().split('T')[0];
-        if (dateStr > today) break;
-
+        
         const dailyRecords = empAttendance.filter(a => a.timestamp?.toDate().toISOString().startsWith(dateStr));
         const checkIns = dailyRecords.filter(r => r.type === 'checkIn').sort((a,b) => a.timestamp.seconds - b.timestamp.seconds);
         
-        let markedPresence = false;
         const earliestCheckIn = checkIns.length > 0 ? checkIns[0].timestamp.toDate() : null;
-        
-        if (earliestCheckIn && earliestCheckIn.getHours() < 11) {
-            markedPresence = true;
-        }
+        let markedPresence = false;
+        if (earliestCheckIn && earliestCheckIn.getHours() < 11) markedPresence = true;
 
-        if (!markedPresence) {
-            const isJustified = justifications.some(j => j.employeeId === emp.id && j.date === dateStr);
-            if (!isJustified) {
-                console.log(`Justificando falta para ${emp.name} em ${dateStr}`);
+        const isJustified = justifications.some(j => j.employeeId === emp.id && j.date === dateStr);
+        
+        // Reset Delay Only
+        if (markedPresence && !isJustified && earliestCheckIn) {
+            const targetTime = new Date(earliestCheckIn);
+            targetTime.setHours(TARGET_START_TIME_HOUR, 0, 0, 0);
+            if (earliestCheckIn > targetTime) {
                 const docRef = doc(collection(db, 'justifications'));
-                batch.set(docRef, { employeeId: emp.id, date: dateStr, reason: 'ResetAll' });
+                batch.set(docRef, { employeeId: emp.id, date: dateStr, reason: 'ResetDelay' });
                 operationsCount++;
-                if (operationsCount >= 450) break;
             }
         }
+        
+        date.setDate(date.getDate() + 1);
+        if (operationsCount >= 450) break;
       }
       if (operationsCount >= 450) break;
     }
     
     if (operationsCount > 0) {
         await batch.commit();
-        console.log(`Commit efetuado. ${operationsCount} justificativas criadas.`);
         await refreshJustifications();
+        alert(`Processo de reset de atrasos finalizado. ${operationsCount} atrasos foram resetados.`);
     } else {
-        console.log("Nenhuma falta nova encontrada para resetar.");
+        alert("Nenhum atraso encontrado para resetar.");
     }
 
     setIsResetting(false);
-    alert("Processo de reset finalizado. Verifique o console do navegador para detalhes.");
+  };
+
+  const handleReset = async () => {
+    if (!confirm(`Deseja resetar ${selectedResetEmp === 'all' ? 'todos os funcionários' : 'o funcionário selecionado'}?`)) return;
+    
+    setIsResetting(true);
+    const batch = writeBatch(db);
+    const currentYear = new Date().getFullYear();
+    const today = new Date();
+    
+    let operationsCount = 0;
+
+    const employeesToReset = selectedResetEmp === 'all' 
+        ? employees 
+        : employees.filter(e => e.id === selectedResetEmp);
+
+    for (const emp of employeesToReset) {
+      const empAttendance = attendance.filter(a => a.employeeId === emp.id);
+      
+      let date = new Date(`${currentYear}-01-01`);
+      while (date <= today) {
+        const dateStr = date.toISOString().split('T')[0];
+
+        const dailyRecords = empAttendance.filter(a => a.timestamp?.toDate().toISOString().startsWith(dateStr));
+        const checkIns = dailyRecords.filter(r => r.type === 'checkIn').sort((a,b) => a.timestamp.seconds - b.timestamp.seconds);
+        
+        const earliestCheckIn = checkIns.length > 0 ? checkIns[0].timestamp.toDate() : null;
+        
+        let markedPresence = false;
+        if (earliestCheckIn && earliestCheckIn.getHours() < 11) markedPresence = true;
+
+        const isJustified = justifications.some(j => j.employeeId === emp.id && j.date === dateStr);
+        
+        // Reset Absence
+        if (!markedPresence && !isJustified && date < today) {
+            const docRef = doc(collection(db, 'justifications'));
+            batch.set(docRef, { employeeId: emp.id, date: dateStr, reason: 'ResetAll' });
+            operationsCount++;
+        } 
+        // Reset Delay
+        else if (markedPresence && !isJustified && earliestCheckIn) {
+            const targetTime = new Date(earliestCheckIn);
+            targetTime.setHours(TARGET_START_TIME_HOUR, 0, 0, 0);
+            if (earliestCheckIn > targetTime) {
+                const docRef = doc(collection(db, 'justifications'));
+                batch.set(docRef, { employeeId: emp.id, date: dateStr, reason: 'ResetDelay' });
+                operationsCount++;
+            }
+        }
+        
+        // Advance date
+        date.setDate(date.getDate() + 1);
+        
+        if (operationsCount >= 450) break;
+      }
+      if (operationsCount >= 450) break;
+    }
+    
+    if (operationsCount > 0) {
+        await batch.commit();
+        await refreshJustifications();
+    }
+
+    setIsResetting(false);
+    alert("Processo de reset finalizado.");
   };
 
   const handleExportPDF = () => {
@@ -166,6 +238,7 @@ export default function MonthlyReports() {
                 
                 let markedPresence = false;
                 const earliestCheckIn = checkIns.length > 0 ? checkIns[0].timestamp.toDate() : null;
+                const isJustified = justifications.some(j => j.employeeId === emp.id && j.date === dateStr);
                 
                 if (earliestCheckIn) {
                     const inHour = earliestCheckIn.getHours();
@@ -173,11 +246,31 @@ export default function MonthlyReports() {
                         markedPresence = true;
                     }
                     
-                    // Calculate delay
-                    const targetTime = new Date(earliestCheckIn);
-                    targetTime.setHours(TARGET_START_TIME_HOUR, 0, 0, 0);
-                    if (earliestCheckIn > targetTime) {
-                        totalDelayMs += (earliestCheckIn.getTime() - targetTime.getTime());
+                    // Calculate delay only if not justified
+                    if (!isJustified) {
+                        const targetTime = new Date(earliestCheckIn);
+                        targetTime.setHours(TARGET_START_TIME_HOUR, 0, 0, 0);
+                        if (earliestCheckIn > targetTime) {
+                            totalDelayMs += (earliestCheckIn.getTime() - targetTime.getTime());
+                        }
+                    }
+                }
+                
+                // Logic for lunch break duration (1h30m = 90min)
+                const LUNCH_DURATION_MS = 90 * 60 * 1000;
+                for (let i = 0; i < Math.min(checkIns.length, checkOuts.length); i++) {
+                    // Logic to identify lunch (assuming checkOut is lunch out, checkIn is lunch in)
+                    // This is a simplified logic, checking if checkOut is around noon
+                    const checkOutTime = checkOuts[i].timestamp.toDate();
+                    const checkInTime = checkIns[i].timestamp.toDate();
+                    
+                    if (checkOutTime.getHours() >= 11 && checkOutTime.getHours() <= 14) {
+                        const lunchDuration = checkInTime.getTime() - checkOutTime.getTime();
+                        if (lunchDuration > LUNCH_DURATION_MS) {
+                             const extraDelay = lunchDuration - LUNCH_DURATION_MS;
+                             totalDelayMs += extraDelay;
+                             totalDurationMs -= extraDelay; // Subtrair do tempo total
+                        }
                     }
                 }
 
@@ -239,8 +332,8 @@ export default function MonthlyReports() {
         />
         <button onClick={handleExportPDF} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Exportar PDF</button>
         <button onClick={handlePrint} className="bg-slate-600 text-white px-4 py-2 rounded hover:bg-slate-700">Imprimir</button>
-        <button onClick={() => { console.log("Botão de reset clicado!"); handleResetAllAbsences(); }} disabled={isResetting} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:bg-gray-400">
-            {isResetting ? 'Resetando...' : 'Resetar Todas as Faltas'}
+        <button onClick={handleReset} disabled={isResetting} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:bg-gray-400">
+            {isResetting ? 'Resetando...' : 'Resetar Ausências'}
         </button>
       </div>
       {activeTab === 'absences' ? (
@@ -279,51 +372,82 @@ export default function MonthlyReports() {
             </tbody>
         </table>
       ) : (
-        <table id="report-table-delays" className="w-full text-left border-collapse bg-white shadow rounded-lg overflow-hidden">
-            <thead className="bg-slate-100">
-            <tr>
-                <th className="p-4">Funcionário</th>
-                <th className="p-4">NIP</th>
-                <th className="p-4">Atraso Acumulado</th>
-                <th className="p-4">Faltas por Atraso</th>
-            </tr>
-            </thead>
-            <tbody>
-            {processedData.map(e => (
-                <tr key={e.id} className="border-t">
-                <td className="p-4">{e.name}</td>
-                <td className="p-4">{e.nip || '-'}</td>
-                <td className="p-4">{formatMs(e.totalDelayMs)}</td>
-                <td className="p-4">
-                     <span className="text-red-600 font-bold">{e.absencesFromDelays}</span>
-                </td>
+        <>
+            <div className="mb-4 flex gap-4">
+                <select value={selectedResetEmp} onChange={(e) => setSelectedResetEmp(e.target.value)} className="border rounded px-3 py-2">
+                    <option value="all">Todos os Funcionários</option>
+                    {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+                <button onClick={handleResetDelays} disabled={isResetting} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:bg-gray-400">
+                    {isResetting ? 'Resetando...' : 'Resetar Atrasos'}
+                </button>
+            </div>
+            <table id="report-table-delays" className="w-full text-left border-collapse bg-white shadow rounded-lg overflow-hidden">
+                <thead className="bg-slate-100">
+                <tr>
+                    <th className="p-4">Funcionário</th>
+                    <th className="p-4">NIP</th>
+                    <th className="p-4">Atraso Acumulado</th>
+                    <th className="p-4">Faltas por Atraso</th>
                 </tr>
-            ))}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                {processedData.map(e => (
+                    <tr key={e.id} className="border-t">
+                    <td className="p-4">{e.name}</td>
+                    <td className="p-4">{e.nip || '-'}</td>
+                    <td className="p-4">{formatMs(e.totalDelayMs)}</td>
+                    <td className="p-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-red-600 font-bold">{e.absencesFromDelays}</span>
+                            <button 
+                                onClick={() => setSelectedEmployeeForAnnul(e)}
+                                className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
+                            >
+                                Anular Atrasos
+                            </button>
+                        </div>
+                    </td>
+                    </tr>
+                ))}
+                </tbody>
+            </table>
+        </>
       )}
       {selectedEmployeeForAnnul && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-lg max-w-lg w-full">
-            <h2 className="text-lg font-bold mb-4">Anular faltas de {selectedEmployeeForAnnul.name}</h2>
+            <h2 className="text-lg font-bold mb-4">Anular {activeTab === 'absences' ? 'faltas' : 'atrasos'} de {selectedEmployeeForAnnul.name}</h2>
             <div className="max-h-60 overflow-y-auto">
               {(() => {
                 const availableDays = Array.from({ length: new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]), 0).getDate() }, (_, i) => i + 1).filter(day => {
                     const dateStr = `${selectedMonth}-${day.toString().padStart(2, '0')}`;
                     const dailyRecords = attendance.filter(a => a.employeeId === selectedEmployeeForAnnul.id && a.timestamp?.toDate().toISOString().startsWith(dateStr));
                     const checkIns = dailyRecords.filter(r => r.type === 'checkIn');
-                    const checkOuts = dailyRecords.filter(r => r.type === 'checkOut');
+                    
                     const earliestCheckIn = checkIns.length > 0 ? checkIns[0].timestamp.toDate() : null;
                     
-                    let markedPresence = false;
-                    if (earliestCheckIn) {
-                        const inHour = earliestCheckIn.getHours();
-                        if (inHour < 11) {
-                            markedPresence = true;
+                    let isTarget = false;
+                    
+                    if (activeTab === 'absences') {
+                        let markedPresence = false;
+                        if (earliestCheckIn && earliestCheckIn.getHours() < 11) markedPresence = true;
+                        
+                        if (!markedPresence && dateStr < new Date().toISOString().split('T')[0]) {
+                            isTarget = true;
+                        }
+                    } else {
+                        // Logic for delays
+                        if (earliestCheckIn) {
+                            const targetTime = new Date(earliestCheckIn);
+                            targetTime.setHours(TARGET_START_TIME_HOUR, 0, 0, 0);
+                            if (earliestCheckIn > targetTime) {
+                                isTarget = true;
+                            }
                         }
                     }
-                    
-                    if (!markedPresence && dateStr < new Date().toISOString().split('T')[0]) {
+
+                    if (isTarget) {
                         const isJustified = justifications.some(j => j.employeeId === selectedEmployeeForAnnul.id && j.date === dateStr);
                         return !isJustified;
                     }
@@ -350,7 +474,7 @@ export default function MonthlyReports() {
                                         <span>{dateStr}</span>
                                     </div>
                                     <button 
-                                        onClick={() => handleAnnulAbsence(selectedEmployeeForAnnul.id, dateStr)}
+                                        onClick={() => handleAnnulRecord(selectedEmployeeForAnnul.id, dateStr)}
                                         className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
                                     >
                                         Anular

@@ -19,7 +19,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pendingView, setPendingView] = useState<string | null>(null);
 
-  const restrictedViews = ['reports', 'monthly-reports', 'cadastro', 'settings'];
+  const restrictedViews = ['reports', 'monthly-reports', 'settings'];
 
   const handleSetActiveView = (view: string) => {
     if (restrictedViews.includes(view) && !isAuthenticated) {
