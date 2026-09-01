@@ -22,14 +22,13 @@ export default function App() {
   const restrictedViews = ['reports', 'monthly-reports', 'settings'];
 
   const handleSetActiveView = (view: string) => {
-    if (restrictedViews.includes(view) && !isAuthenticated) {
+    if (restrictedViews.includes(view)) {
+        setIsAuthenticated(false); // Force re-authentication
         setPendingView(view);
         setShowAdminPrompt(true);
     } else {
         setActiveView(view);
-        if (restrictedViews.includes(view)) {
-            setIsAuthenticated(true);
-        }
+        setIsAuthenticated(false); // Reset auth when moving to non-restricted
     }
   };
 
