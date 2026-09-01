@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { db } from '../lib/firebase';
-import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 import bgImage from '../../src/assets/images/empresário-verificando-o-tempo-olhando-relógio-de-pulso-parado-no-aeroporto-panorama-viagem-negócios-negro-com-mala-verificar-185816105.webp';
 
 export default function Cadastro() {
@@ -13,15 +13,13 @@ export default function Cadastro() {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
     setIsSubmitting(true);
-    console.log('handleSubmit: Iniciando processo de cadastro');
+    
     try {
-      let photoUrl = '';
-
-      // 1. Criar o registro do funcionário no Firestore
       await addDoc(collection(db, 'employees'), {
         name,
         email,
@@ -30,14 +28,12 @@ export default function Cadastro() {
         phoneNumber,
         role,
         password,
-        photoUrl,
         createdAt: new Date()
       });
 
       setSuccessMessage('Cadastro efetuado com sucesso!');
       setTimeout(() => setSuccessMessage(null), 3000);
       
-      // Reset form
       setName('');
       setEmail('');
       setBiometricId('');
@@ -47,8 +43,8 @@ export default function Cadastro() {
       setPassword('');
       
     } catch (error) {
-      console.error('handleSubmit: ERRO CRÍTICO NO CADASTRO:', error);
-      alert('Erro ao cadastrar funcionário. Verifique o console para detalhes técnicos.');
+      console.error('Erro ao cadastrar funcionário:', error);
+      alert(`Erro ao cadastrar funcionário: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -56,7 +52,6 @@ export default function Cadastro() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Background Image with Overlay */}
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url(${bgImage})` }}

@@ -34,7 +34,6 @@ export default function Employees() {
   const [adminUser, setAdminUser] = useState('');
   const [adminPass, setAdminPass] = useState('');
   const [employeeToToggle, setEmployeeToToggle] = useState<Employee | null>(null);
-  const [loginBiometricId, setLoginBiometricId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [tempPhotoFile, setTempPhotoFile] = useState<File | null>(null);
   const [tempPhotoPreview, setTempPhotoPreview] = useState<string | null>(null);
@@ -79,21 +78,30 @@ export default function Employees() {
   };
 
   const takePhoto = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    console.log("Employees.tsx: takePhoto chamado!");
+    if (!videoRef.current || !canvasRef.current) {
+        console.error("Employees.tsx: takePhoto abortado - video ou canvas ausente");
+        return;
+    }
 
     const context = canvasRef.current.getContext('2d');
     if (context) {
       context.drawImage(videoRef.current, 0, 0, 640, 480);
       canvasRef.current.toBlob((blob) => {
-        if (!blob) return;
+        if (!blob) {
+            console.error("Employees.tsx: takePhoto - blob vazio");
+            return;
+        }
         const file = new File([blob], `profile_${Date.now()}.jpeg`, { type: 'image/jpeg' });
+        console.log("Employees.tsx: takePhoto - arquivo criado:", file.name, file.size);
         setTempPhotoFile(file);
         const reader = new FileReader();
         reader.onloadend = () => {
           const base64data = reader.result as string;
           setTempPhotoPreview(base64data);
-          sessionStorage.setItem('tempPhotoPreview_' + selectedEmployee.id, base64data);
+          sessionStorage.setItem('tempPhotoPreview_' + selectedEmployee?.id, base64data);
           setPhotoUpdateTrigger(prev => prev + 1);
+          console.log("Employees.tsx: takePhoto - preview e trigger atualizados");
         };
         reader.readAsDataURL(blob);
         stopCamera();
@@ -104,17 +112,32 @@ export default function Employees() {
 
   const savePhoto = async () => {
     console.log("Employees.tsx: savePhoto chamado!");
-    if (!tempPhotoFile || !selectedEmployee) {
-        console.log("Employees.tsx: savePhoto abortado - tempPhotoFile ou selectedEmployee ausente", {tempPhotoFile: !!tempPhotoFile, selectedEmployee: !!selectedEmployee});
+    
+    let fileToUpload = tempPhotoFile;
+    
+    // Fallback: tentar reconstruir o arquivo a partir do sessionStorage se tempPhotoFile estiver vazio
+    if (!fileToUpload && selectedEmployee) {
+        const storedPreview = sessionStorage.getItem('tempPhotoPreview_' + selectedEmployee.id);
+        if (storedPreview) {
+            console.log("Employees.tsx: Reconstruindo arquivo a partir do sessionStorage");
+            const response = await fetch(storedPreview);
+            const blob = await response.blob();
+            fileToUpload = new File([blob], `profile_${Date.now()}.jpeg`, { type: 'image/jpeg' });
+        }
+    }
+
+    if (!fileToUpload || !selectedEmployee) {
+        console.error("Employees.tsx: savePhoto abortado - fileToUpload ou selectedEmployee ausente", {fileToUpload: !!fileToUpload, selectedEmployee: !!selectedEmployee});
+        alert("Erro: Foto não encontrada. Por favor, tire a foto novamente.");
         return;
     }
 
     try {
-      console.log("Employees.tsx: Iniciando upload do arquivo:", tempPhotoFile.name);
-      const storageRef = ref(storage, `employees/${selectedEmployee.email}.jpeg`);
+      console.log("Employees.tsx: Iniciando upload do arquivo:", fileToUpload.name, "para funcionário:", selectedEmployee.id);
+      const storageRef = ref(storage, `employees/${selectedEmployee.id}.jpeg`);
       
       console.log("Employees.tsx: Chamando uploadBytes...");
-      await uploadBytes(storageRef, tempPhotoFile);
+      await uploadBytes(storageRef, fileToUpload);
       console.log("Employees.tsx: uploadBytes sucesso.");
       
       const photoUrl = await getDownloadURL(storageRef);
@@ -130,10 +153,10 @@ export default function Employees() {
       sessionStorage.removeItem('tempPhotoPreview_' + selectedEmployee.id);
       setPhotoUpdateTrigger(prev => prev + 1);
       
-      alert("Foto atualizada com sucesso!");
+      alert("Foto salva permanentemente com sucesso!");
     } catch (e: any) {
-      console.error("Erro detalhado no upload:", e);
-      alert(`Erro ao atualizar foto: ${e.message || 'Erro desconhecido'}.`);
+      console.error("Erro detalhado no upload ou salvamento:", e);
+      alert(`Erro ao salvar foto: ${e.message || 'Erro desconhecido'}. Verifique as permissões do Firebase.`);
     }
   };
 
@@ -177,13 +200,12 @@ export default function Employees() {
   const handleLogin = () => {
     if (!selectedEmployee) return;
     
-    if (loginBiometricId === selectedEmployee.biometricId && loginPassword === selectedEmployee.password) {
+    if (loginPassword === selectedEmployee.password) {
       setShowLoginModal(false);
       setShowTimeOptionsModal(true);
-      setLoginBiometricId('');
       setLoginPassword('');
     } else {
-      alert('Biometric ID ou Senha incorretos.');
+      alert('Senha incorreta.');
     }
   };
 
@@ -597,14 +619,7 @@ export default function Employees() {
         {showLoginModal && (
           <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm space-y-4">
-              <h2 className="text-xl font-bold mb-4 text-center">Login</h2>
-              <input 
-                type="text" 
-                placeholder="Biometric ID" 
-                value={loginBiometricId} 
-                onChange={(e) => setLoginBiometricId(e.target.value)} 
-                className="w-full p-2 border rounded" 
-              />
+              <h2 className="text-xl font-bold mb-4 text-center">Senha do Funcionário</h2>
               <input 
                 type="password" 
                 placeholder="Senha" 

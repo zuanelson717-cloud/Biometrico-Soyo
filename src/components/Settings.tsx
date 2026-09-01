@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import bgImage from '../../src/assets/images/empresário-verificando-o-tempo-olhando-relógio-de-pulso-parado-no-aeroporto-panorama-viagem-negócios-negro-com-mala-verificar-185816105.webp';
+import nelsonImage from '../../src/assets/nelson_zua.jpg';
 
 interface Employee {
   id: string;
@@ -70,6 +71,7 @@ export default function Settings() {
           <h2 className="text-lg font-semibold">Sobre o APK</h2>
           <p className="text-gray-600 mt-2">Versão 1.0.0 - Sistema de Gestão de Ponto Biométrico.</p>
           <p className="text-gray-600 mt-2">Criado pelo IT- Nelson Braulio Zua, estudante de Rede e Programação java e Phyton, HTML, CSS, e Agente de Inteligencia Artificial.</p>
+          <img src={nelsonImage} alt="Nelson Zua" className="w-32 h-32 rounded-full object-cover mt-4" />
         </section>
 
         <section>
