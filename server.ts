@@ -4,6 +4,7 @@ import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import 'dotenv/config';
+import cors from 'cors';
 
 async function startServer() {
     const app = express();
@@ -11,6 +12,7 @@ async function startServer() {
 
     const dbx = new Dropbox({ accessToken: process.env.DROPBOX_ACCESS_TOKEN || '' });
 
+    app.use(cors()); // Enable CORS for all routes
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 
@@ -55,6 +57,12 @@ async function startServer() {
             console.error('Dropbox upload error:', error);
             res.status(500).json({ error: 'Failed to upload photo' });
         }
+    });
+
+    // Global error handler
+    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+        console.error('Global Error Handler caught error:', err);
+        res.status(500).json({ error: 'Internal Server Error', message: err.message });
     });
 
     // Vite middleware for development or static serving for production
