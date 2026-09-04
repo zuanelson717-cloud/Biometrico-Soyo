@@ -8,10 +8,19 @@ async function startServer() {
     const app = express();
     const upload = multer({ storage: multer.memoryStorage() });
 
-    const dbx = new Dropbox({ accessToken: process.env.DROPBOX_ACCESS_TOKEN });
+    const dbx = new Dropbox({ accessToken: process.env.DROPBOX_ACCESS_TOKEN || '' });
+
+    // Logging middleware
+    app.use((req, res, next) => {
+        console.log(`[${req.method}] ${req.path}`);
+        next();
+    });
 
     // API routes
     app.post('/api/upload-photo', upload.single('photo'), async (req, res) => {
+        if (!process.env.DROPBOX_ACCESS_TOKEN) {
+            return res.status(500).json({ error: 'DROPBOX_ACCESS_TOKEN not configured' });
+        }
         try {
             const { employeeId } = req.body;
             const file = req.file;
