@@ -12,7 +12,12 @@ async function startServer() {
 
     const dbx = new Dropbox({ accessToken: process.env.DROPBOX_ACCESS_TOKEN || '' });
 
-    app.use(cors()); // Enable CORS for all routes
+    // Extreme CORS
+    app.use(cors({
+        origin: '*',
+        methods: ['GET', 'POST', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization']
+    }));
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 
@@ -23,6 +28,10 @@ async function startServer() {
     });
 
     // API routes
+    app.get('/api/health', (req, res) => {
+        res.status(200).json({ status: 'ok' });
+    });
+
     app.post('/api/upload-photo', upload.single('photo'), async (req, res) => {
         console.log('--- RECEIVED UPLOAD REQUEST ---');
         console.log('Body:', req.body);
