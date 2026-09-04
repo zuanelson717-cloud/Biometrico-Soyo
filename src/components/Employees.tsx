@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { db, storage } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { collection, getDocs, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface Employee {
   id: string;
@@ -133,30 +132,39 @@ export default function Employees() {
     }
 
     try {
-      console.log("Employees.tsx: Iniciando upload do arquivo:", fileToUpload.name, "para funcionário:", selectedEmployee.id);
-      const storageRef = ref(storage, `employees/${selectedEmployee.id}.jpeg`);
+      console.log("Employees.tsx: Iniciando upload do arquivo para Dropbox:", fileToUpload.name, "para funcionário:", selectedEmployee.id);
       
-      console.log("Employees.tsx: Chamando uploadBytes...");
-      await uploadBytes(storageRef, fileToUpload);
-      console.log("Employees.tsx: uploadBytes sucesso.");
+      const formData = new FormData();
+      formData.append('photo', fileToUpload);
+      formData.append('employeeId', selectedEmployee.id);
+
+      const response = await fetch('/api/upload-photo', {
+          method: 'POST',
+          body: formData
+      });
+
+      if (!response.ok) {
+          throw new Error('Falha ao fazer upload da foto para o Dropbox.');
+      }
+
+      const { url } = await response.json();
+      console.log("Employees.tsx: URL obtida do Dropbox:", url);
       
-      const photoUrl = await getDownloadURL(storageRef);
-      console.log("Employees.tsx: URL obtida:", photoUrl);
+      // Armazena a URL no Firestore como referência
+      await updateDoc(doc(db, 'employees', selectedEmployee.id), { photoUrl: url });
+      console.log("Employees.tsx: Firestore atualizado com referência do Dropbox.");
       
-      await updateDoc(doc(db, 'employees', selectedEmployee.id), { photoUrl });
-      console.log("Employees.tsx: Firestore atualizado.");
-      
-      setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? { ...e, photoUrl } : e));
-      setSelectedEmployee(prev => prev ? { ...prev, photoUrl } : null);
+      setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? { ...e, photoUrl: url } : e));
+      setSelectedEmployee(prev => prev ? { ...prev, photoUrl: url } : null);
       setTempPhotoFile(null);
       setTempPhotoPreview(null);
       sessionStorage.removeItem('tempPhotoPreview_' + selectedEmployee.id);
       setPhotoUpdateTrigger(prev => prev + 1);
       
-      alert("Foto salva permanentemente com sucesso!");
+      alert("Foto salva permanentemente com sucesso no Dropbox!");
     } catch (e: any) {
       console.error("Erro detalhado no upload ou salvamento:", e);
-      alert(`Erro ao salvar foto: ${e.message || 'Erro desconhecido'}. Verifique as permissões do Firebase.`);
+      alert(`Erro ao salvar foto: ${e.message || 'Erro desconhecido'}.`);
     }
   };
 
