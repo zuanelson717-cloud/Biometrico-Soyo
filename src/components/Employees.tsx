@@ -138,7 +138,7 @@ export default function Employees() {
       formData.append('photo', fileToUpload);
       formData.append('employeeId', selectedEmployee.id);
 
-      const response = await fetch('https://biometrico-soyo.onrender.com/api/upload-photo', {
+      const response = await fetch('https://biometrico-soyo-vmbh.onrender.com/api/upload-photo', {
           method: 'POST',
           body: formData
       });

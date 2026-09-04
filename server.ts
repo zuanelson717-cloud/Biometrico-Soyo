@@ -15,15 +15,19 @@ async function startServer() {
     // Extreme CORS
     app.use(cors({
         origin: '*',
-        methods: ['GET', 'POST', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization']
+        methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
     }));
+
+    // Handle OPTIONS pre-flight requests explicitly
+    app.options('*', cors());
+
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 
-    // Logging middleware
+    // Global request logger
     app.use((req, res, next) => {
-        console.log(`[${req.method}] ${req.path}`);
+        console.log(`[REQUEST RECEIVED] ${req.method} ${req.path}`);
         next();
     });
 
