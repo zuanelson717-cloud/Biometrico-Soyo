@@ -138,16 +138,20 @@ export default function Employees() {
       formData.append('photo', fileToUpload);
       formData.append('employeeId', selectedEmployee.id);
 
-      const response = await fetch('https://biometrico-soyo-vmbh.onrender.com/api/upload-photo', {
+      const response = await fetch('/api/upload-photo', {
           method: 'POST',
           body: formData
       });
 
+      const responseData = await response.json();
+      console.log("Employees.tsx: API response:", responseData);
+      
       if (!response.ok) {
-          throw new Error('Falha ao fazer upload da foto para o Dropbox.');
+          // Display the entire response object as a string to ensure we see the true error
+          throw new Error(JSON.stringify(responseData));
       }
-
-      const { url } = await response.json();
+      
+      const { url } = responseData;
       console.log("Employees.tsx: URL obtida do Dropbox:", url);
       
       // Armazena a URL no Firestore como referência
