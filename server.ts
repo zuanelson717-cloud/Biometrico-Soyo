@@ -10,7 +10,12 @@ async function startServer() {
     const app = express();
     const upload = multer({ storage: multer.memoryStorage() });
 
-    const dbx = new Dropbox({ accessToken: process.env.DROPBOX_ACCESS_TOKEN || '' });
+    // Initialize Dropbox client lazily inside the route handler
+    const getDbx = () => {
+        const token = process.env.DROPBOX_ACCESS_TOKEN;
+        console.log(`[DIAGNOSTIC] DROPBOX_ACCESS_TOKEN prefix: ${token ? token.substring(0, 4) + '...' : 'UNDEFINED/EMPTY'}`);
+        return new Dropbox({ accessToken: token || '' });
+    };
 
     // Extreme CORS
     app.use(cors({
@@ -31,7 +36,7 @@ async function startServer() {
         next();
     });
 
-    // API routes
+    // API routes FIRST
     app.get('/api/health', (req, res) => {
         res.status(200).json({ status: 'ok' });
     });
@@ -57,6 +62,7 @@ async function startServer() {
             const path = `/FotosFuncionarios/${employeeId}.jpeg`;
             
             console.log('Uploading to Dropbox:', path);
+            const dbx = getDbx();
             await dbx.filesUpload({
                 path: path,
                 contents: file.buffer,
@@ -78,24 +84,6 @@ async function startServer() {
         }
     });
 
-    // Global error handler
-    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-        console.error('Global Error Handler caught error:', err);
-        res.status(500).json({ error: 'Internal Server Error', message: err.message });
-    });
-
-    // Catch-all logger for unmatched routes
-    app.use((req, res, next) => {
-        console.log(`[UNMATCHED ROUTE] ${req.method} ${req.path}`);
-        next();
-    });
-
-    // Catch-all for POST requests to diagnose 404s
-    app.post('*', (req, res, next) => {
-        console.log(`[UNMATCHED POST REQUEST] ${req.method} ${req.path}`);
-        res.status(404).json({ error: 'Route not found' });
-    });
-
     // Vite middleware for development or static serving for production
     if (process.env.NODE_ENV !== 'production') {
         const vite = await createViteServer({
@@ -106,10 +94,8 @@ async function startServer() {
     } else {
         const distPath = path.join(process.cwd(), 'dist');
         app.use(express.static(distPath));
-        app.get('*', (req, res, next) => {
-            if (req.path.startsWith('/api/')) {
-                return next();
-            }
+        // SPA fallback: Serve index.html for all non-API requests
+        app.get('*', (req, res) => {
             res.sendFile(path.join(distPath, 'index.html'));
         });
     }
