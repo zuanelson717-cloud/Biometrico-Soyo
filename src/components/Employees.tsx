@@ -140,7 +140,10 @@ export default function Employees() {
 
       const response = await fetch('/api/upload-photo', {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: {
+              'Accept': 'application/json'
+          }
       });
 
       const responseData = await response.json();

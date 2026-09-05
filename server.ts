@@ -84,6 +84,18 @@ async function startServer() {
         res.status(500).json({ error: 'Internal Server Error', message: err.message });
     });
 
+    // Catch-all logger for unmatched routes
+    app.use((req, res, next) => {
+        console.log(`[UNMATCHED ROUTE] ${req.method} ${req.path}`);
+        next();
+    });
+
+    // Catch-all for POST requests to diagnose 404s
+    app.post('*', (req, res, next) => {
+        console.log(`[UNMATCHED POST REQUEST] ${req.method} ${req.path}`);
+        res.status(404).json({ error: 'Route not found' });
+    });
+
     // Vite middleware for development or static serving for production
     if (process.env.NODE_ENV !== 'production') {
         const vite = await createViteServer({

@@ -15,6 +15,10 @@ interface AttendancePair {
   extraTimeMs?: number;
 }
 
+const SHIFT_START_HOUR = 8;
+const MAX_LUNCH_DURATION_MS = 1.5 * 60 * 60 * 1000; // 1h 30m
+const FULL_SHIFT_MS = 8 * 60 * 60 * 1000; // 8 horas
+
 export default function Reports() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
@@ -170,7 +174,26 @@ export default function Reports() {
     
     const isAbsent = isToday && isAfter11AM && pairs.length === 0 && !isJustified;
 
-    return { pairs, lunchPairs, isActive, isAbsent, totalDurationMs };
+    // --- Atrasos (Cálculos) ---
+    // 1. Atraso na Entrada
+    let arrivalDelayMs = 0;
+    if (pairs.length > 0 && pairs[0].checkIn) {
+        const checkInTime = new Date(pairs[0].checkIn);
+        const shiftStart = new Date(checkInTime);
+        shiftStart.setHours(SHIFT_START_HOUR, 0, 0, 0);
+        if (checkInTime > shiftStart) {
+            arrivalDelayMs = checkInTime.getTime() - shiftStart.getTime();
+        }
+    }
+
+    // 2. Atraso na Refeição (já calculado no loop lunchPairs)
+    let totalLunchOverrunMs = 0;
+    lunchPairs.forEach(p => { if (p.extraTimeMs) totalLunchOverrunMs += p.extraTimeMs; });
+
+    // 3. Atraso Diário
+    const dailyDelayMs = arrivalDelayMs + totalLunchOverrunMs;
+
+    return { pairs, lunchPairs, isActive, isAbsent, totalDurationMs, dailyDelayMs };
   };
 
   const processedEmployees = employees.map(emp => {
@@ -293,6 +316,7 @@ export default function Reports() {
                 {activeTab === 'refeicao' ? 'Registros (Refeição)' : 'Registros (Entrada / Saída)'}
             </th>
             <th className="py-2">Carga Horária</th>
+            <th className="py-2">Atraso</th>
           </tr>
         </thead>
         <tbody>
@@ -355,7 +379,6 @@ export default function Reports() {
               </td>
               <td className="py-2 text-xs">
                 {activeTab !== 'refeicao' && e.totalDurationMs > 0 ? (() => {
-                    const eightHoursMs = 8 * 60 * 60 * 1000;
                     
                     const formatMs = (ms: number) => {
                         const hrs = Math.floor(ms / (1000 * 60 * 60));
@@ -365,17 +388,20 @@ export default function Reports() {
                     
                     const totalStr = formatMs(e.totalDurationMs);
                     
-                    if (e.totalDurationMs > eightHoursMs) {
-                        const extraTimeMs = e.totalDurationMs - eightHoursMs;
+                    if (e.totalDurationMs > FULL_SHIFT_MS) {
+                        const extraTimeMs = e.totalDurationMs - FULL_SHIFT_MS;
                         return (
                             <span className="font-bold text-slate-900">
-                                {totalStr} <span className="text-green-600">+{formatMs(extraTimeMs)}</span>
+                                {totalStr} <span className="text-slate-900">+{formatMs(extraTimeMs)}</span>
                             </span>
                         );
                     } else {
                         return <span className="text-slate-900">{totalStr}</span>;
                     }
                 })() : '-'}
+              </td>
+              <td className="py-2 text-xs text-red-600 font-bold">
+                 {activeTab !== 'refeicao' && e.dailyDelayMs > 0 ? formatDuration(e.dailyDelayMs) : '-'}
               </td>
             </tr>
           ))}
