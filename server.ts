@@ -23,8 +23,14 @@ async function startServer() {
     const app = express();
     const upload = multer({ storage: multer.memoryStorage() });
 
-    // Dropbox OAuth helper
-    const getDropboxAuth = () => {
+    // Dropbox OAuth helpers
+    const getDropboxAuthForAuth = () => {
+        return new DropboxAuth({
+            clientId: process.env.DROPBOX_APP_KEY,
+        });
+    };
+
+    const getDropboxAuthForToken = () => {
         return new DropboxAuth({
             clientId: process.env.DROPBOX_APP_KEY,
             clientSecret: process.env.DROPBOX_APP_SECRET,
@@ -34,7 +40,7 @@ async function startServer() {
     // Helper to get or refresh DBX client
     const getDbx = async () => {
         if (!db) throw new Error('Firebase DB not initialized');
-        const auth = getDropboxAuth();
+        const auth = getDropboxAuthForToken();
         const docRef = doc(db, 'dropbox_config', 'settings');
         const docSnap = await getDoc(docRef);
         
@@ -65,7 +71,7 @@ async function startServer() {
 
     // Dropbox OAuth Routes
     app.get('/api/dropbox/auth', async (req, res) => {
-        const auth = getDropboxAuth();
+        const auth = getDropboxAuthForAuth();
         const authUrl = await auth.getAuthenticationUrl(
             'https://biometrico-tgqi.onrender.com/api/dropbox/callback',
             null,
@@ -73,7 +79,7 @@ async function startServer() {
             'offline',
             undefined,
             'none',
-            false
+            true // Enable PKCE
         );
         res.redirect(authUrl as string);
     });
@@ -81,7 +87,7 @@ async function startServer() {
     app.get('/api/dropbox/callback', async (req, res) => {
         try {
             const { code } = req.query;
-            const auth = getDropboxAuth();
+            const auth = getDropboxAuthForToken();
             const tokenResponse = await auth.getAccessTokenFromCode(
                 'https://biometrico-tgqi.onrender.com/api/dropbox/callback',
                 code as string
