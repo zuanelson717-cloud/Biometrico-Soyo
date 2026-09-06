@@ -137,13 +137,11 @@ async function startServer() {
             console.log('Upload successful, URL:', link.result.link);
             res.json({ url: link.result.link, path: path });
         } catch (error: any) {
-            console.error('Dropbox upload error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-            // Return the actual error message from the Dropbox SDK/API if available
-            const errorMessage = error.error?.error_summary || error.message || String(error);
+            console.error('[UPLOAD ERROR]', error);
+            // Always return JSON, even on error
             res.status(500).json({ 
                 error: 'Failed to upload photo', 
-                message: errorMessage,
-                details: error.error ? JSON.stringify(error.error) : 'No additional details'
+                message: error.message || 'Unknown error'
             });
         }
     });
