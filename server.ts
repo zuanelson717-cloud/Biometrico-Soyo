@@ -10,8 +10,14 @@ import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import firebaseConfig from './firebase-applet-config.json';
 
 // Initialize Firebase for server
-const appFirebase = initializeApp(firebaseConfig);
-const db = getFirestore(appFirebase);
+let db: any;
+try {
+    const appFirebase = initializeApp(firebaseConfig);
+    db = getFirestore(appFirebase, firebaseConfig.firestoreDatabaseId);
+    console.log('[SERVER] Firebase initialized successfully with database:', firebaseConfig.firestoreDatabaseId);
+} catch (error) {
+    console.error('[SERVER] Failed to initialize Firebase:', error);
+}
 
 async function startServer() {
     const app = express();
@@ -27,6 +33,7 @@ async function startServer() {
 
     // Helper to get or refresh DBX client
     const getDbx = async () => {
+        if (!db) throw new Error('Firebase DB not initialized');
         const auth = getDropboxAuth();
         const docRef = doc(db, 'dropbox_config', 'settings');
         const docSnap = await getDoc(docRef);
@@ -72,18 +79,23 @@ async function startServer() {
     });
 
     app.get('/api/dropbox/callback', async (req, res) => {
-        const { code } = req.query;
-        const auth = getDropboxAuth();
-        const tokenResponse = await auth.getAccessTokenFromCode(
-            'https://biometrico-tgqi.onrender.com/api/dropbox/callback',
-            code as string
-        );
-        
-        await setDoc(doc(db, 'dropbox_config', 'settings'), {
-            refresh_token: tokenResponse.result.refresh_token
-        });
-        
-        res.send('Dropbox configurado com sucesso! Pode fechar esta janela.');
+        try {
+            const { code } = req.query;
+            const auth = getDropboxAuth();
+            const tokenResponse = await auth.getAccessTokenFromCode(
+                'https://biometrico-tgqi.onrender.com/api/dropbox/callback',
+                code as string
+            );
+            
+            await setDoc(doc(db, 'dropbox_config', 'settings'), {
+                refresh_token: tokenResponse.result.refresh_token
+            });
+            
+            res.send('Dropbox configurado com sucesso! Pode fechar esta janela.');
+        } catch (error) {
+            console.error('[DROPBOX CALLBACK ERROR]', error);
+            res.status(500).send('Erro na configuração do Dropbox. Por favor, tente novamente.');
+        }
     });
 
     // Global request logger
