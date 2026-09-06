@@ -92,9 +92,9 @@ async function startServer() {
             });
             
             res.send('Dropbox configurado com sucesso! Pode fechar esta janela.');
-        } catch (error) {
+        } catch (error: any) {
             console.error('[DROPBOX CALLBACK ERROR]', error);
-            res.status(500).send('Erro na configuração do Dropbox. Por favor, tente novamente.');
+            res.status(500).send(`Erro na configuração do Dropbox: ${error.message || String(error)}. Por favor, tente novamente.`);
         }
     });
 
