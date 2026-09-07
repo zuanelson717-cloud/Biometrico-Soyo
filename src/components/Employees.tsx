@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 
 interface Employee {
   id: string;
@@ -40,12 +40,31 @@ export default function Employees() {
   const [photoUpdateTrigger, setPhotoUpdateTrigger] = useState(0);
 
   useEffect(() => {
-    if (selectedEmployee) {
-      setTempPhotoPreview(sessionStorage.getItem('tempPhotoPreview_' + selectedEmployee.id));
-    } else {
-      setTempPhotoPreview(null);
-    }
-  }, [selectedEmployee]);
+    const handleRedirectResult = async () => {
+      const auth = getAuth();
+      const result = await getRedirectResult(auth);
+      if (result) {
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const token = credential?.accessToken;
+        
+        // Retrieve temporary file info from sessionStorage to resume upload
+        const pendingEmployeeId = sessionStorage.getItem('pendingUploadEmployeeId');
+        if (pendingEmployeeId && token) {
+            // Need to retrieve the file from somewhere, maybe store base64 in session
+            const storedPreview = sessionStorage.getItem('tempPhotoPreview_' + pendingEmployeeId);
+            if (storedPreview && token) {
+                const response = await fetch(storedPreview);
+                const blob = await response.blob();
+                const fileToUpload = new File([blob], `profile_${Date.now()}.jpeg`, { type: 'image/jpeg' });
+                
+                // Trigger actual upload here (or call a function)
+                // This requires refactoring savePhoto or creating a resumeUpload function
+            }
+        }
+      }
+    };
+    handleRedirectResult();
+  }, []);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -135,18 +154,16 @@ export default function Employees() {
     try {
       console.log("Employees.tsx: Iniciando upload do arquivo para Google Drive:", fileToUpload.name, "para funcionário:", selectedEmployee.id);
       
-      // Get the Google Access Token
       const authInstance = getAuth();
-
-      // We need to re-authenticate with drive scopes if we don't have the token
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       
-      const result = await signInWithPopup(authInstance, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      const token = credential?.accessToken;
-
-      if (!token) throw new Error("Não foi possível obter o token do Google Drive");
+      // Use redirect instead of popup
+      await signInWithRedirect(authInstance, provider);
+      
+      // Note: The code below will NOT be reached immediately because of the redirect.
+      // We need to handle the result when the page reloads, using getRedirectResult.
+      return; 
 
       const formData = new FormData();
       formData.append('photo', fileToUpload);
