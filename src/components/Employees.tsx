@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 interface Employee {
   id: string;
@@ -132,8 +133,26 @@ export default function Employees() {
     }
 
     try {
-      console.log("Employees.tsx: Iniciando upload do arquivo para Dropbox:", fileToUpload.name, "para funcionário:", selectedEmployee.id);
+      console.log("Employees.tsx: Iniciando upload do arquivo para Google Drive:", fileToUpload.name, "para funcionário:", selectedEmployee.id);
       
+      // Get the Google Access Token (simplified, assumes user already logged in with Google)
+      // Note: In a real production app, you might need to handle token refresh or GSI
+      const authInstance = getAuth();
+      const user = authInstance.currentUser;
+      if (!user) throw new Error("Usuário não autenticado");
+
+      // We need to re-authenticate with drive scopes if we don't have the token
+      // This is a simplified approach, real implementation requires GSI
+      const provider = new GoogleAuthProvider();
+      provider.addScope('https://www.googleapis.com/auth/drive.file');
+      
+      // In a real app, you would check if you already have a Drive-scoped token
+      const result = await signInWithPopup(authInstance, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const token = credential?.accessToken;
+
+      if (!token) throw new Error("Não foi possível obter o token do Google Drive");
+
       const formData = new FormData();
       formData.append('photo', fileToUpload);
       formData.append('employeeId', selectedEmployee.id);
@@ -142,7 +161,8 @@ export default function Employees() {
           method: 'POST',
           body: formData,
           headers: {
-              'Accept': 'application/json'
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${token}`
           }
       });
 
@@ -150,16 +170,15 @@ export default function Employees() {
       console.log("Employees.tsx: API response:", responseData);
       
       if (!response.ok) {
-          // Display the entire response object as a string to ensure we see the true error
-          throw new Error(JSON.stringify(responseData));
+          throw new Error(responseData.message || JSON.stringify(responseData));
       }
       
       const { url } = responseData;
-      console.log("Employees.tsx: URL obtida do Dropbox:", url);
+      console.log("Employees.tsx: URL obtida do Drive:", url);
       
       // Armazena a URL no Firestore como referência
       await updateDoc(doc(db, 'employees', selectedEmployee.id), { photoUrl: url });
-      console.log("Employees.tsx: Firestore atualizado com referência do Dropbox.");
+      console.log("Employees.tsx: Firestore atualizado com referência do Google Drive.");
       
       setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? { ...e, photoUrl: url } : e));
       setSelectedEmployee(prev => prev ? { ...prev, photoUrl: url } : null);
@@ -168,7 +187,7 @@ export default function Employees() {
       sessionStorage.removeItem('tempPhotoPreview_' + selectedEmployee.id);
       setPhotoUpdateTrigger(prev => prev + 1);
       
-      alert("Foto salva permanentemente com sucesso no Dropbox!");
+      alert("Foto salva permanentemente com sucesso no Google Drive!");
     } catch (e: any) {
       console.error("Erro detalhado no upload ou salvamento:", e);
       alert(`Erro ao salvar foto: ${e.message || 'Erro desconhecido'}.`);
