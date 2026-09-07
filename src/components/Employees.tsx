@@ -135,18 +135,13 @@ export default function Employees() {
     try {
       console.log("Employees.tsx: Iniciando upload do arquivo para Google Drive:", fileToUpload.name, "para funcionário:", selectedEmployee.id);
       
-      // Get the Google Access Token (simplified, assumes user already logged in with Google)
-      // Note: In a real production app, you might need to handle token refresh or GSI
+      // Get the Google Access Token
       const authInstance = getAuth();
-      const user = authInstance.currentUser;
-      if (!user) throw new Error("Usuário não autenticado");
 
       // We need to re-authenticate with drive scopes if we don't have the token
-      // This is a simplified approach, real implementation requires GSI
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       
-      // In a real app, you would check if you already have a Drive-scoped token
       const result = await signInWithPopup(authInstance, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       const token = credential?.accessToken;
