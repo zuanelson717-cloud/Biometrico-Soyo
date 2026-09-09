@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { db } from '../lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
-import bgImage from '../../src/assets/images/empresário-verificando-o-tempo-olhando-relógio-de-pulso-parado-no-aeroporto-panorama-viagem-negócios-negro-com-mala-verificar-185816105.webp';
+import bgImage from '../assets/images/empresário-verificando-o-tempo-olhando-relógio-de-pulso-parado-no-aeroporto-panorama-viagem-negócios-negro-com-mala-verificar-185816105.webp';
 
 export default function Cadastro() {
   const [name, setName] = useState('');

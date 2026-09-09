@@ -40,7 +40,7 @@ export default function Reports() {
           for (const id of uniqueIds) {
               if (id) {
                 console.log('Tentando apagar documento:', id);
-                await deleteDoc(doc(db, 'attendance', id));
+                await deleteDoc(doc(db, 'attendance', id as string));
                 console.log('Documento apagado:', id);
               }
           }

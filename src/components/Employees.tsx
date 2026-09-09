@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 
 interface Employee {
   id: string;
@@ -30,7 +29,6 @@ export default function Employees() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [showAdminEditModal, setShowAdminEditModal] = useState(false);
   const [adminUser, setAdminUser] = useState('');
   const [adminPass, setAdminPass] = useState('');
   const [employeeToToggle, setEmployeeToToggle] = useState<Employee | null>(null);
@@ -38,33 +36,6 @@ export default function Employees() {
   const [tempPhotoFile, setTempPhotoFile] = useState<File | null>(null);
   const [tempPhotoPreview, setTempPhotoPreview] = useState<string | null>(null);
   const [photoUpdateTrigger, setPhotoUpdateTrigger] = useState(0);
-
-  useEffect(() => {
-    const handleRedirectResult = async () => {
-      const auth = getAuth();
-      const result = await getRedirectResult(auth);
-      if (result) {
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        const token = credential?.accessToken;
-        
-        // Retrieve temporary file info from sessionStorage to resume upload
-        const pendingEmployeeId = sessionStorage.getItem('pendingUploadEmployeeId');
-        if (pendingEmployeeId && token) {
-            // Need to retrieve the file from somewhere, maybe store base64 in session
-            const storedPreview = sessionStorage.getItem('tempPhotoPreview_' + pendingEmployeeId);
-            if (storedPreview && token) {
-                const response = await fetch(storedPreview);
-                const blob = await response.blob();
-                const fileToUpload = new File([blob], `profile_${Date.now()}.jpeg`, { type: 'image/jpeg' });
-                
-                // Trigger actual upload here (or call a function)
-                // This requires refactoring savePhoto or creating a resumeUpload function
-            }
-        }
-      }
-    };
-    handleRedirectResult();
-  }, []);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -97,22 +68,14 @@ export default function Employees() {
   };
 
   const takePhoto = async () => {
-    console.log("Employees.tsx: takePhoto chamado!");
-    if (!videoRef.current || !canvasRef.current) {
-        console.error("Employees.tsx: takePhoto abortado - video ou canvas ausente");
-        return;
-    }
+    if (!videoRef.current || !canvasRef.current) return;
 
     const context = canvasRef.current.getContext('2d');
     if (context) {
       context.drawImage(videoRef.current, 0, 0, 640, 480);
       canvasRef.current.toBlob((blob) => {
-        if (!blob) {
-            console.error("Employees.tsx: takePhoto - blob vazio");
-            return;
-        }
+        if (!blob) return;
         const file = new File([blob], `profile_${Date.now()}.jpeg`, { type: 'image/jpeg' });
-        console.log("Employees.tsx: takePhoto - arquivo criado:", file.name, file.size);
         setTempPhotoFile(file);
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -120,7 +83,6 @@ export default function Employees() {
           setTempPhotoPreview(base64data);
           sessionStorage.setItem('tempPhotoPreview_' + selectedEmployee?.id, base64data);
           setPhotoUpdateTrigger(prev => prev + 1);
-          console.log("Employees.tsx: takePhoto - preview e trigger atualizados");
         };
         reader.readAsDataURL(blob);
         stopCamera();
@@ -130,80 +92,22 @@ export default function Employees() {
   };
 
   const savePhoto = async () => {
-    console.log("Employees.tsx: savePhoto chamado!");
-    
-    let fileToUpload = tempPhotoFile;
-    
-    // Fallback: tentar reconstruir o arquivo a partir do sessionStorage se tempPhotoFile estiver vazio
-    if (!fileToUpload && selectedEmployee) {
-        const storedPreview = sessionStorage.getItem('tempPhotoPreview_' + selectedEmployee.id);
-        if (storedPreview) {
-            console.log("Employees.tsx: Reconstruindo arquivo a partir do sessionStorage");
-            const response = await fetch(storedPreview);
-            const blob = await response.blob();
-            fileToUpload = new File([blob], `profile_${Date.now()}.jpeg`, { type: 'image/jpeg' });
-        }
-    }
-
-    if (!fileToUpload || !selectedEmployee) {
-        console.error("Employees.tsx: savePhoto abortado - fileToUpload ou selectedEmployee ausente", {fileToUpload: !!fileToUpload, selectedEmployee: !!selectedEmployee});
-        alert("Erro: Foto não encontrada. Por favor, tire a foto novamente.");
+    if (!selectedEmployee || !tempPhotoPreview) {
+        alert("Erro: Foto não encontrada.");
         return;
     }
 
-    try {
-      console.log("Employees.tsx: Iniciando upload do arquivo para Google Drive:", fileToUpload.name, "para funcionário:", selectedEmployee.id);
-      
-      const authInstance = getAuth();
-      const provider = new GoogleAuthProvider();
-      provider.addScope('https://www.googleapis.com/auth/drive.file');
-      
-      // Use redirect instead of popup
-      await signInWithRedirect(authInstance, provider);
-      
-      // Note: The code below will NOT be reached immediately because of the redirect.
-      // We need to handle the result when the page reloads, using getRedirectResult.
-      return; 
-
-      const formData = new FormData();
-      formData.append('photo', fileToUpload);
-      formData.append('employeeId', selectedEmployee.id);
-
-      const response = await fetch('/api/upload-photo', {
-          method: 'POST',
-          body: formData,
-          headers: {
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${token}`
-          }
-      });
-
-      const responseData = await response.json();
-      console.log("Employees.tsx: API response:", responseData);
-      
-      if (!response.ok) {
-          throw new Error(responseData.message || JSON.stringify(responseData));
-      }
-      
-      const { url } = responseData;
-      console.log("Employees.tsx: URL obtida do Drive:", url);
-      
-      // Armazena a URL no Firestore como referência
-      await updateDoc(doc(db, 'employees', selectedEmployee.id), { photoUrl: url });
-      console.log("Employees.tsx: Firestore atualizado com referência do Google Drive.");
-      
-      setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? { ...e, photoUrl: url } : e));
-      setSelectedEmployee(prev => prev ? { ...prev, photoUrl: url } : null);
-      setTempPhotoFile(null);
-      setTempPhotoPreview(null);
-      sessionStorage.removeItem('tempPhotoPreview_' + selectedEmployee.id);
-      setPhotoUpdateTrigger(prev => prev + 1);
-      
-      alert("Foto salva permanentemente com sucesso no Google Drive!");
-    } catch (e: any) {
-      console.error("Erro detalhado no upload ou salvamento:", e);
-      alert(`Erro ao salvar foto: ${e.message || 'Erro desconhecido'}.`);
-    }
+    // Apenas atualiza a UI e sessionStorage, sem upload externo
+    await updateDoc(doc(db, 'employees', selectedEmployee.id), { photoUrl: tempPhotoPreview });
+    
+    setEmployees(prev => prev.map(e => e.id === selectedEmployee.id ? { ...e, photoUrl: tempPhotoPreview } : e));
+    setSelectedEmployee(prev => prev ? { ...prev, photoUrl: tempPhotoPreview } : null);
+    setTempPhotoFile(null);
+    setTempPhotoPreview(null);
+    sessionStorage.removeItem('tempPhotoPreview_' + selectedEmployee.id);
+    setPhotoUpdateTrigger(prev => prev + 1);
+    
+    alert("Foto salva localmente no aplicativo!");
   };
 
   const closeModals = () => {
@@ -562,56 +466,6 @@ export default function Employees() {
                   onClick={() => {
                     stopCamera();
                     setShowCameraModal(false);
-                  }}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showAdminEditModal && (
-          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm space-y-4">
-              <h2 className="text-xl font-bold mb-4 text-center">Senha do Administrador</h2>
-              <input 
-                type="text" 
-                placeholder="Usuário Admin" 
-                value={adminUser} 
-                onChange={(e) => setAdminUser(e.target.value)} 
-                className="w-full p-2 border rounded" 
-              />
-              <input 
-                type="password" 
-                placeholder="Senha Admin" 
-                value={adminPass} 
-                onChange={(e) => setAdminPass(e.target.value)} 
-                className="w-full p-2 border rounded" 
-              />
-              <div className="flex gap-4">
-                <button 
-                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
-                  onClick={() => {
-                    if (adminUser === 'admin' && adminPass === 'R@ma,2027#') {
-                      setShowAdminEditModal(false);
-                      setShowEditModal(true);
-                      setAdminUser('');
-                      setAdminPass('');
-                    } else {
-                      alert('SENHA ERRADA');
-                    }
-                  }}
-                >
-                  Confirmar
-                </button>
-                <button 
-                  className="flex-1 bg-slate-200 text-slate-800 py-2 rounded-lg hover:bg-slate-300"
-                  onClick={() => {
-                    setShowAdminEditModal(false);
-                    setEditingEmployee(null);
-                    setAdminUser('');
-                    setAdminPass('');
                   }}
                 >
                   Cancelar
