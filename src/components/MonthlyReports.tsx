@@ -334,49 +334,51 @@ export default function MonthlyReports() {
   if (loading) return <div className="p-8">Carregando relatórios mensais...</div>;
 
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">Relatórios Mensais</h1>
-      <div className="flex mb-6 border-b">
-         <button onClick={() => setActiveTab('absences')} className={`p-4 ${activeTab === 'absences' ? 'border-b-2 border-blue-600 font-bold' : ''}`}>Faltas por Ausência</button>
-         <button onClick={() => setActiveTab('delays')} className={`p-4 ${activeTab === 'delays' ? 'border-b-2 border-blue-600 font-bold' : ''}`}>Faltas por Atraso</button>
+    <div className="p-4 md:p-8">
+      <h1 className="text-xl font-bold mb-4">Relatórios Mensais</h1>
+      <div className="flex flex-wrap gap-2 mb-4 border-b pb-2">
+         <button onClick={() => setActiveTab('absences')} className={`p-2 text-sm ${activeTab === 'absences' ? 'border-b-2 border-blue-600 font-bold' : ''}`}>Faltas</button>
+         <button onClick={() => setActiveTab('delays')} className={`p-2 text-sm ${activeTab === 'delays' ? 'border-b-2 border-blue-600 font-bold' : ''}`}>Atrasos</button>
       </div>
-      <div className="mb-6 flex gap-4">
+      <div className="mb-4 flex flex-wrap gap-2">
         <input 
             type="month" 
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="border rounded px-3 py-2"
+            className="border rounded px-2 py-1 text-sm"
         />
         <input 
             type="text" 
-            placeholder="Buscar por nome ou NIP..."
+            placeholder="Buscar..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="border rounded px-3 py-2 flex-grow"
+            className="border rounded px-2 py-1 text-sm flex-grow"
         />
-        <button onClick={handleExportPDF} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Exportar PDF</button>
-        <button onClick={handlePrint} className="bg-slate-600 text-white px-4 py-2 rounded hover:bg-slate-700">Imprimir</button>
-        <button onClick={handleReset} disabled={isResetting} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:bg-gray-400">
-            {isResetting ? 'Resetando...' : 'Resetar Ausências'}
+        <button onClick={handleExportPDF} className="bg-green-600 text-white px-3 py-1.5 text-sm rounded hover:bg-green-700">PDF</button>
+        <button onClick={handlePrint} className="bg-slate-600 text-white px-3 py-1.5 text-sm rounded hover:bg-slate-700">Imprimir</button>
+        <button onClick={handleReset} disabled={isResetting} className="bg-red-600 text-white px-3 py-1.5 text-sm rounded hover:bg-red-700 disabled:bg-gray-400">
+            {isResetting ? '...' : 'Resetar'}
         </button>
       </div>
+      
+      <div className="overflow-x-auto">
       {activeTab === 'absences' ? (
-        <table id="report-table" className="w-full text-left border-collapse bg-white shadow rounded-lg overflow-hidden">
+        <table className="w-full text-left border-collapse bg-white shadow rounded-lg overflow-hidden text-[10px] whitespace-nowrap">
             <thead className="bg-slate-100">
             <tr>
-                <th className="p-4">Funcionário</th>
-                <th className="p-4">NIP</th>
-                <th className="p-4">Carga Horária Total</th>
-                <th className="p-4">Faltas</th>
+                <th className="p-2">Funcionário</th>
+                <th className="p-2">NIP</th>
+                <th className="p-2">Carga</th>
+                <th className="p-2">Faltas</th>
             </tr>
             </thead>
             <tbody>
             {processedData.map(e => (
                 <tr key={e.id} className="border-t">
-                <td className="p-4">{e.name}</td>
-                <td className="p-4">{e.nip || '-'}</td>
-                <td className="p-4">{formatMs(e.totalDurationMs)}</td>
-                <td className="p-4">
+                <td className="p-2">{e.name}</td>
+                <td className="p-2">{e.nip || '-'}</td>
+                <td className="p-2">{formatMs(e.totalDurationMs)}</td>
+                <td className="p-2">
                     {e.absences === 0 ? (
                         <span className="text-green-600 font-bold">Nenhuma</span>
                     ) : (
@@ -384,7 +386,7 @@ export default function MonthlyReports() {
                         <span className="text-red-600 font-bold">{e.absences}</span>
                         <button 
                             onClick={() => setSelectedEmployeeForAnnul(e)}
-                            className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
+                            className="text-[9px] bg-red-100 text-red-700 px-1 py-0.5 rounded hover:bg-red-200"
                         >
                             Anular
                         </button>
@@ -486,7 +488,7 @@ export default function MonthlyReports() {
                             }} checked={selectedDaysForAnnul.length === availableDays.length && availableDays.length > 0} />
                             <span>Selecionar Todos</span>
                         </div>
-                        {availableDays.map(day => {
+                {availableDays.map(day => {
                             const dateStr = `${selectedMonth}-${day.toString().padStart(2, '0')}`;
                             return (
                                 <div key={day} className="flex justify-between items-center py-2 border-b">
@@ -504,10 +506,10 @@ export default function MonthlyReports() {
                                         Anular
                                     </button>
                                 </div>
-                            )
+                            );
                         })}
                     </>
-                )
+                );
               })()}
             </div>
             <div className="mt-4 flex gap-2">
@@ -520,5 +522,6 @@ export default function MonthlyReports() {
         </div>
       )}
     </div>
-  );
+  </div>
+);
 }

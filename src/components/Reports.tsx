@@ -239,12 +239,13 @@ export default function Reports() {
             e.nip || '-',
             e.role,
             e.pairs.map(p => `Entrada: ${p.checkInStr || '-'} | Saída: ${p.checkOutStr || '-'}`).join('\n'),
-            durationStr
+            durationStr,
+            e.dailyDelayMs > 0 ? formatDuration(e.dailyDelayMs) : '-'
         ];
     });
 
     autoTable(doc, {
-        head: [['Funcionário', 'NIP', 'Cargo', 'Registros', 'Carga Horária']],
+        head: [['Funcionário', 'NIP', 'Cargo', 'Registros', 'Carga Horária', 'Atraso']],
         body: tableData,
     });
 
@@ -254,42 +255,32 @@ export default function Reports() {
   if (loading) return <div className="p-8">Carregando relatórios...</div>;
 
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-2">Relatórios Diários</h1>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-4">
+    <div className="p-4 md:p-8">
+      <h1 className="text-xl font-bold mb-4">Relatórios Diários</h1>
+      <div className="flex flex-col gap-3 mb-4">
+        <div className="flex flex-wrap items-center gap-2">
             <input 
                 type="date" 
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="border rounded px-3 py-2"
+                className="border rounded px-2 py-1 text-sm"
             />
             <input 
                 type="text" 
-                placeholder="Buscar por nome ou NIP..."
+                placeholder="Buscar..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="border rounded px-3 py-2"
+                className="border rounded px-2 py-1 text-sm flex-grow"
             />
-            <div className="flex space-x-2">
-                <button onClick={() => setActiveTab('present')} className={`px-4 py-2 rounded ${activeTab === 'present' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Presentes</button>
-                <button onClick={() => setActiveTab('absent')} className={`px-4 py-2 rounded ${activeTab === 'absent' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Ausentes</button>
-                <button onClick={() => setActiveTab('refeicao')} className={`px-4 py-2 rounded ${activeTab === 'refeicao' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Refeição</button>
-            </div>
         </div>
-        <div className="flex space-x-2">
-            <button 
-                onClick={handlePrint}
-                className="bg-slate-600 text-white px-4 py-2 rounded hover:bg-slate-700"
-            >
-                Imprimir
-            </button>
-            <button 
-                onClick={handleDownloadPDF}
-                className="bg-slate-800 text-white px-4 py-2 rounded hover:bg-slate-900"
-            >
-                Gerar PDF
-            </button>
+        <div className="flex flex-wrap gap-1">
+            <button onClick={() => setActiveTab('present')} className={`px-3 py-1.5 text-sm rounded ${activeTab === 'present' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Presentes</button>
+            <button onClick={() => setActiveTab('absent')} className={`px-3 py-1.5 text-sm rounded ${activeTab === 'absent' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Ausentes</button>
+            <button onClick={() => setActiveTab('refeicao')} className={`px-3 py-1.5 text-sm rounded ${activeTab === 'refeicao' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Refeição</button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+            <button onClick={handlePrint} className="bg-slate-600 text-white px-3 py-1.5 text-sm rounded hover:bg-slate-700">Imprimir</button>
+            <button onClick={handleDownloadPDF} className="bg-slate-800 text-white px-3 py-1.5 text-sm rounded hover:bg-slate-900">PDF</button>
             {activeTab === 'refeicao' && (
                 <button 
                     onClick={() => {
@@ -297,36 +288,35 @@ export default function Reports() {
                         setIsDeleteMode(!isDeleteMode);
                         setSelectedForDeletion([]);
                     }}
-                    className={`${isDeleteMode ? 'bg-red-700' : 'bg-red-500'} text-white px-4 py-2 rounded hover:bg-red-800`}
+                    className={`${isDeleteMode ? 'bg-red-700' : 'bg-red-500'} text-white px-3 py-1.5 text-sm rounded hover:bg-red-800`}
                 >
-                    {isDeleteMode ? 'Confirmar Deleção' : 'Apagar Refeições'}
+                    {isDeleteMode ? 'Confirmar' : 'Apagar'}
                 </button>
             )}
         </div>
       </div>
 
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b">
-            {isDeleteMode && activeTab === 'refeicao' && <th className="py-2"></th>}
-            <th className="py-2">Funcionário</th>
-            <th className="py-2">NIP</th>
-            <th className="py-2">Cargo</th>
-            <th className="py-2">
-                {activeTab === 'refeicao' ? 'Registros (Refeição)' : 'Registros (Entrada / Saída)'}
-            </th>
-            <th className="py-2">Carga Horária</th>
-            <th className="py-2">Atraso</th>
-          </tr>
-        </thead>
-        <tbody>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse text-[10px] whitespace-nowrap">
+          <thead className="bg-slate-100">
+            <tr className="border-b">
+              {isDeleteMode && activeTab === 'refeicao' && <th className="py-2 px-1"></th>}
+              <th className="py-2 px-2">Funcionário</th>
+              <th className="py-2 px-2">NIP</th>
+              <th className="py-2 px-2">Cargo</th>
+              <th className="py-2 px-2">Registros</th>
+              <th className="py-2 px-2">Carga</th>
+              <th className="py-2 px-2">Atraso</th>
+            </tr>
+          </thead>
+          <tbody>
           {filtered.map(e => (
             <tr key={e.id} className="border-b">
               {isDeleteMode && activeTab === 'refeicao' && <td className="py-2"></td>}
-              <td className="py-2">{e.name}</td>
-              <td className="py-2">{e.nip || '-'}</td>
-              <td className="py-2">{e.role}</td>
-              <td className="py-2">
+              <td className="py-2 px-2">{e.name}</td>
+              <td className="py-2 px-2">{e.nip || '-'}</td>
+              <td className="py-2 px-2">{e.role}</td>
+              <td className="py-2 px-2">
                 <div className="flex flex-col gap-1">
                   {activeTab === 'refeicao' ? (
                       e.lunchPairs.length > 0 ? (
@@ -377,7 +367,7 @@ export default function Reports() {
                   )}
                 </div>
               </td>
-              <td className="py-2 text-xs">
+              <td className="py-2 px-2 text-[10px]">
                 {activeTab !== 'refeicao' && e.totalDurationMs > 0 ? (() => {
                     
                     const formatMs = (ms: number) => {
@@ -400,7 +390,7 @@ export default function Reports() {
                     }
                 })() : '-'}
               </td>
-              <td className="py-2 text-xs text-red-600 font-bold">
+              <td className="py-2 px-2 text-[10px] text-red-600 font-bold">
                  {activeTab !== 'refeicao' && e.dailyDelayMs > 0 ? formatDuration(e.dailyDelayMs) : '-'}
               </td>
             </tr>
@@ -408,6 +398,7 @@ export default function Reports() {
         </tbody>
       </table>
     </div>
-  );
+  </div>
+);
 }
 

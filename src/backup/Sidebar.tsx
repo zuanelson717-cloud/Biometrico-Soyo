@@ -1,7 +1,5 @@
 import React from 'react';
 import { LayoutDashboard, Users, FileText, Settings, UserPlus } from 'lucide-react';
-import { PWAInstallButton } from './PWAInstallButton';
-import { useLanguage } from '../context/LanguageContext';
 
 interface SidebarProps {
   activeView: string;
@@ -9,14 +7,13 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeView, setActiveView }: SidebarProps) {
-  const { t } = useLanguage();
   const menuItems = [
-    { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
-    { id: 'employees', label: t('employees'), icon: Users },
-    { id: 'reports', label: t('reports'), icon: FileText },
-    { id: 'monthly-reports', label: t('monthlyReports'), icon: FileText },
-    { id: 'cadastro', label: t('cadastro'), icon: UserPlus },
-    { id: 'settings', label: t('settings'), icon: Settings },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'employees', label: 'Funcionários', icon: Users },
+    { id: 'reports', label: 'Relatório Diário', icon: FileText },
+    { id: 'monthly-reports', label: 'Relatórios Mensais', icon: FileText },
+    { id: 'cadastro', label: 'Cadastro', icon: UserPlus },
+    { id: 'settings', label: 'Configurações', icon: Settings },
   ];
 
   return (
@@ -25,25 +22,22 @@ export default function Sidebar({ activeView, setActiveView }: SidebarProps) {
         <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">B</div>
         <h1 className="text-lg font-semibold text-white tracking-tight">BioGuard <span className="text-blue-500">Pro</span></h1>
       </div>
-      <nav className="flex flex-col gap-2 flex-grow">
+      <nav className="flex flex-col gap-2">
         {menuItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveView(item.id)}
-            className={`flex items-center gap-3 px-4 py-4 rounded-md transition-colors ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-md transition-colors ${
               activeView === item.id 
                 ? 'bg-blue-600/10 text-blue-400 font-medium' 
                 : 'hover:bg-slate-800 text-slate-400 hover:text-slate-200'
             }`}
           >
-            <item.icon size={24} />
+            <item.icon size={20} />
             {item.label}
           </button>
         ))}
       </nav>
-      <div className="mt-auto pt-6 border-t border-slate-800">
-        <PWAInstallButton />
-      </div>
     </div>
   );
 }
