@@ -217,6 +217,27 @@ export default function MonthlyReports() {
   };
 
 
+  const isWeekendOrHoliday = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const day = d.getUTCDay();
+    if (day === 0 || day === 6) return true;
+    const holidays = [
+      '2026-01-01', // New Year
+      '2026-01-04', // Martyrs of Colonial Repression
+      '2026-02-04', // Liberation Struggle
+      '2026-02-17', // Carnival Tuesday
+      '2026-03-08', // International Women's Day
+      '2026-03-23', // Southern Africa Liberation Day
+      '2026-04-04', // Peace and Reconciliation Day
+      '2026-05-01', // International Workers' Day
+      '2026-09-17', // National Hero Day
+      '2026-11-02', // All Souls' Day
+      '2026-11-11', // Independence Day
+      '2026-12-25'  // Christmas Day
+    ]; 
+    return holidays.includes(dateStr);
+  };
+
   const processedData = employees.map(emp => {
     const empAttendance = attendance.filter(a => a.employeeId === emp.id && a.timestamp?.toDate().toISOString().startsWith(selectedMonth));
     
@@ -275,9 +296,12 @@ export default function MonthlyReports() {
                 }
 
                 if (!markedPresence) {
-                    // Check if justified
-                    const isJustified = justifications.some(j => j.employeeId === emp.id && j.date === dateStr);
-                    if (!isJustified) absences++;
+                    // NEW PROTOCOL: Only count absence if NOT weekend/holiday
+                    if (!isWeekendOrHoliday(dateStr)) {
+                        // Check if justified
+                        const isJustified = justifications.some(j => j.employeeId === emp.id && j.date === dateStr);
+                        if (!isJustified) absences++;
+                    }
                 } else {
                     // Calculate duration for the day
                     for (let i = 0; i < Math.min(checkIns.length, checkOuts.length); i++) {
