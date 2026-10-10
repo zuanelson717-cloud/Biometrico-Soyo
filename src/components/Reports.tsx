@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, getDocs, deleteDoc, doc, addDoc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
+import { generatePDFContent } from '../lib/pdfGenerator';
 import { Employee, Attendance } from '../types';
+import { GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
 
 interface AttendancePair {
   checkInId?: string;
@@ -19,16 +21,117 @@ const SHIFT_START_HOUR = 8;
 const MAX_LUNCH_DURATION_MS = 1.5 * 60 * 60 * 1000; // 1h 30m
 const FULL_SHIFT_MS = 8 * 60 * 60 * 1000; // 8 horas
 
-export default function Reports() {
+export default function Reports({ userEmail }: { userEmail: string | null }) {
+  const [user, setUser] = useState<User | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [activeTab, setActiveTab] = useState<'present' | 'absent' | 'refeicao'>('present');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'present' | 'absent' | 'refeicao' | 'schedule'>('present');
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [scheduleSettings, setScheduleSettings] = useState({
+      frequency: 'daily', // 'daily' | 'weekly' | 'monthly'
+      reportType: 'refeicao', // 'refeicao' | 'diario'
+      recipientEmail: userEmail || '',
+      employeeIds: [] as string[]
+  });
   const [loading, setLoading] = useState(true);
+  const [schedules, setSchedules] = useState<any[]>([]);
   const [justifications, setJustifications] = useState<any[]>([]);
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [reportTime, setReportTime] = useState('00:00');
+  const [autoReportEnabled, setAutoReportEnabled] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const empSnap = await getDocs(collection(db, 'employees'));
+        const empList = empSnap.docs.map(d => ({ id: d.id, ...d.data() } as Employee));
+        setEmployees(empList);
+
+        const attSnap = await getDocs(collection(db, 'attendance'));
+        const attList = attSnap.docs.map(d => ({ ...d.data(), id: d.id } as Attendance));
+        setAttendance(attList);
+
+        const justSnap = await getDocs(collection(db, 'justifications'));
+        setJustifications(justSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        
+        const schedSnap = await getDocs(collection(db, 'reportSchedules'));
+        setSchedules(schedSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        
+        const autoReportDoc = await getDoc(doc(db, 'config', 'autoReportSettings'));
+        if (autoReportDoc.exists()) {
+            setAutoReportEnabled(autoReportDoc.data().enabled);
+            setReportTime(autoReportDoc.data().reportTime || '00:00');
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []); // Removido [user]
+
+  if (loading) return <div className="p-8">Carregando relatórios...</div>;
+
+  // ... (rest of the component logic)
+  const saveSchedule = async () => {
+      try {
+          await addDoc(collection(db, 'reportSchedules'), {
+              ...scheduleSettings,
+              createdAt: new Date()
+          });
+          alert('Agendamento salvo com sucesso!');
+          setScheduleModalOpen(false);
+      } catch (e) {
+          console.error(e);
+          alert('Erro ao salvar agendamento.');
+      }
+  };
+
+  const sendReportNow = async () => {
+    try {
+        const emailDoc = await getDoc(doc(db, 'config', 'emailSettings'));
+        const emails = emailDoc.exists() && emailDoc.data().emails?.length > 0 
+            ? emailDoc.data().emails 
+            : [userEmail].filter(Boolean) as string[];
+        
+        console.log('Sending report with:', { employees: filtered.length, emails });
+        
+        const accessToken = user ? await user.getIdToken() : null;
+        
+        const response = await fetch('/api/enviar-relatorio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                employees: filtered, 
+                emails,
+                accessToken
+            }),
+        });
+        
+        if (response.ok) {
+            alert('Relatório enviado com sucesso!');
+        } else {
+            alert('Erro ao enviar relatório.');
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Erro ao enviar relatório.');
+    }
+  };
 
   const deleteSelectedLunchPairs = async () => {
       if (selectedForDeletion.length === 0) return;
@@ -69,29 +172,6 @@ export default function Reports() {
       const mins = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
       return `${hrs}h ${mins}m`;
   };
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const empSnap = await getDocs(collection(db, 'employees'));
-        const empList = empSnap.docs.map(d => ({ id: d.id, ...d.data() } as Employee));
-        setEmployees(empList);
-
-        const attSnap = await getDocs(collection(db, 'attendance'));
-        const attList = attSnap.docs.map(d => ({ ...d.data(), id: d.id } as Attendance));
-        setAttendance(attList);
-
-        const justSnap = await getDocs(collection(db, 'justifications'));
-        setJustifications(justSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
 
   const getStatusForDate = (employeeId: string, date: string) => {
     const records = attendance
@@ -222,33 +302,7 @@ export default function Reports() {
 
   const handleDownloadPDF = () => {
     const doc = new jsPDF();
-    doc.text(`Relatório Diário - ${selectedDate}`, 14, 10);
-    
-    const tableData = filtered.map(e => {
-        const eightHoursMs = 8 * 60 * 60 * 1000;
-        
-        const totalStr = formatDuration(e.totalDurationMs);
-        let durationStr = e.totalDurationMs > 0 ? totalStr : '-';
-        if (e.totalDurationMs > eightHoursMs) {
-            const extraTimeMs = e.totalDurationMs - eightHoursMs;
-            durationStr = `${totalStr} +${formatDuration(extraTimeMs)}`;
-        }
-        
-        return [
-            e.name,
-            e.nip || '-',
-            e.role,
-            e.pairs.map(p => `Entrada: ${p.checkInStr || '-'} | Saída: ${p.checkOutStr || '-'}`).join('\n'),
-            durationStr,
-            e.dailyDelayMs > 0 ? formatDuration(e.dailyDelayMs) : '-'
-        ];
-    });
-
-    autoTable(doc, {
-        head: [['Funcionário', 'NIP', 'Cargo', 'Registros', 'Carga Horária', 'Atraso']],
-        body: tableData,
-    });
-
+    generatePDFContent(doc, filtered, selectedDate);
     doc.save(`relatorio_${selectedDate}.pdf`);
   };
 
@@ -277,10 +331,108 @@ export default function Reports() {
             <button onClick={() => setActiveTab('present')} className={`px-3 py-1.5 text-sm rounded ${activeTab === 'present' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Presentes</button>
             <button onClick={() => setActiveTab('absent')} className={`px-3 py-1.5 text-sm rounded ${activeTab === 'absent' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Ausentes</button>
             <button onClick={() => setActiveTab('refeicao')} className={`px-3 py-1.5 text-sm rounded ${activeTab === 'refeicao' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Refeição</button>
+            <button onClick={() => setActiveTab('schedule')} className={`px-3 py-1.5 text-sm rounded ${activeTab === 'schedule' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Agendamento</button>
         </div>
+        
+        {activeTab === 'schedule' && (
+            <div className="p-4 border rounded bg-slate-50">
+                <div className="mb-4">
+                    <h3 className="font-bold mb-2">Relatório Diário Automático:</h3>
+                    <button 
+                        onClick={async () => {
+                            const newEnabled = !autoReportEnabled;
+                            await fetch('/api/toggle-auto-report', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ enabled: newEnabled, reportTime })
+                            });
+                            setAutoReportEnabled(newEnabled);
+                        }}
+                        className={`px-4 py-2 rounded text-white ${autoReportEnabled ? 'bg-red-600' : 'bg-green-600'}`}
+                    >
+                        {autoReportEnabled ? 'Desativar Agendamento Automático' : 'Ativar Agendamento Automático'}
+                    </button>
+                    <div className="mt-2">
+                        <label className="text-sm font-bold">Horário:</label>
+                        <input 
+                            type="time" 
+                            value={reportTime} 
+                            onChange={(e) => setReportTime(e.target.value)}
+                            className="ml-2 border rounded p-1 text-sm"
+                        />
+                    </div>
+                </div>
+                <button onClick={() => setScheduleModalOpen(true)} className="bg-blue-600 text-white px-3 py-1.5 rounded mb-4">Novo Agendamento</button>
+                <h3 className="font-bold mb-2">Agendamentos Atuais:</h3>
+                {schedules.length === 0 && <p className="text-sm text-slate-500">Nenhum agendamento definido.</p>}
+                {schedules.map(s => (
+                    <div key={s.id} className="border p-2 rounded bg-white mb-2 text-sm">
+                        <p><strong>Frequência:</strong> {s.frequency === 'daily' ? 'Diário' : s.frequency === 'weekly' ? 'Semanal' : 'Mensal'}</p>
+                        <p><strong>Tipo:</strong> {s.reportType === 'refeicao' ? 'Refeição' : 'Diário'}</p>
+                        <p><strong>Email:</strong> {s.recipientEmail}</p>
+                        <p><strong>Funcionários:</strong> {s.employeeIds.length} selecionados</p>
+                    </div>
+                ))}
+            </div>
+        )}
+        {scheduleModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+                <div className="bg-white p-6 rounded shadow-lg w-full max-w-lg">
+                    <h2 className="text-lg font-bold mb-4">Novo Agendamento</h2>
+                    <div className="flex flex-col gap-3">
+                        <select 
+                            value={scheduleSettings.frequency} 
+                            onChange={(e) => setScheduleSettings({...scheduleSettings, frequency: e.target.value})}
+                            className="border rounded p-2"
+                        >
+                            <option value="daily">Diário</option>
+                            <option value="weekly">Semanal</option>
+                            <option value="monthly">Mensal</option>
+                        </select>
+                        <select 
+                            value={scheduleSettings.reportType} 
+                            onChange={(e) => setScheduleSettings({...scheduleSettings, reportType: e.target.value})}
+                            className="border rounded p-2"
+                        >
+                            <option value="refeicao">Refeição</option>
+                            <option value="diario">Diário</option>
+                        </select>
+                        <input 
+                            type="email" 
+                            placeholder="Email do Administrador"
+                            value={scheduleSettings.recipientEmail}
+                            onChange={(e) => setScheduleSettings({...scheduleSettings, recipientEmail: e.target.value})}
+                            className="border rounded p-2"
+                        />
+                        <div className="border rounded p-2 h-40 overflow-y-auto">
+                            <p className="text-sm font-semibold mb-2">Funcionários:</p>
+                            {employees.map(e => (
+                                <div key={e.id} className="flex items-center gap-2">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={scheduleSettings.employeeIds.includes(e.id)}
+                                        onChange={(event) => {
+                                            const newIds = event.target.checked 
+                                                ? [...scheduleSettings.employeeIds, e.id]
+                                                : scheduleSettings.employeeIds.filter(id => id !== e.id);
+                                            setScheduleSettings({...scheduleSettings, employeeIds: newIds});
+                                        }}
+                                    />
+                                    <span>{e.name}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <button onClick={saveSchedule} className="bg-green-600 text-white px-4 py-2 rounded mt-4">Salvar</button>
+                    <button onClick={() => setScheduleModalOpen(false)} className="ml-2 px-4 py-2">Cancelar</button>
+                </div>
+            </div>
+        )}
         <div className="flex flex-wrap gap-2">
             <button onClick={handlePrint} className="bg-slate-600 text-white px-3 py-1.5 text-sm rounded hover:bg-slate-700">Imprimir</button>
             <button onClick={handleDownloadPDF} className="bg-slate-800 text-white px-3 py-1.5 text-sm rounded hover:bg-slate-900">PDF</button>
+            <button onClick={() => setScheduleModalOpen(true)} className="bg-purple-700 text-white px-3 py-1.5 text-sm rounded hover:bg-purple-800">Agendar Envio Automático</button>
+            <button onClick={sendReportNow} className="bg-green-700 text-white px-3 py-1.5 text-sm rounded hover:bg-green-800">Enviar Relatório Agora</button>
             {activeTab === 'refeicao' && (
                 <button 
                     onClick={() => {

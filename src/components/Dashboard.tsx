@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import logoImage from '../../assets/images.png';
-import bgImage from '../../src/assets/images/empresário-verificando-o-tempo-olhando-relógio-de-pulso-parado-no-aeroporto-panorama-viagem-negócios-negro-com-mala-verificar-185816105.webp';
+import logoImage from '../assets/nelson_zua.jpg';
+import bgImage from '../assets/images/empresário-verificando-o-tempo-olhando-relógio-de-pulso-parado-no-aeroporto-panorama-viagem-negócios-negro-com-mala-verificar-185816105.webp';
 import DigitalNeonClock from './DigitalNeonClock';
 import { useLanguage } from '../context/LanguageContext';
 

@@ -20,6 +20,8 @@ export default function Employees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [showPhotoPasswordModal, setShowPhotoPasswordModal] = useState(false);
+  const [photoPasswordInput, setPhotoPasswordInput] = useState('');
   const [showPasswordCheckModal, setShowPasswordCheckModal] = useState(false);
   const [passwordCheckInput, setPasswordCheckInput] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -329,7 +331,7 @@ export default function Employees() {
               <div className="flex flex-col items-center gap-4">
                 <div 
                   className="w-32 h-32 rounded-full overflow-hidden border-4 border-blue-100 shadow-md relative group cursor-pointer"
-                  onClick={() => setShowCameraModal(true)}
+                  onClick={() => setShowPhotoPasswordModal(true)}
                 >
                   <img 
                     key={selectedEmployee.photoUrl || 'default'}
@@ -344,6 +346,46 @@ export default function Employees() {
                     Tirar Foto
                   </div>
                 </div>
+
+        {showPhotoPasswordModal && selectedEmployee && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm space-y-4">
+              <h2 className="text-xl font-bold mb-4 text-center">Senha do Funcionário</h2>
+              <input 
+                type="password" 
+                placeholder="Senha" 
+                value={photoPasswordInput} 
+                onChange={(e) => setPhotoPasswordInput(e.target.value)} 
+                className="w-full p-2 border rounded" 
+              />
+              <div className="flex gap-4">
+                <button 
+                  className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700"
+                  onClick={() => {
+                    if (photoPasswordInput === selectedEmployee.password) {
+                      setShowPhotoPasswordModal(false);
+                      setShowCameraModal(true);
+                      setPhotoPasswordInput('');
+                    } else {
+                      alert('SENHA ERRADA');
+                    }
+                  }}
+                >
+                  Confirmar
+                </button>
+                <button 
+                  className="flex-1 bg-slate-200 text-slate-800 py-2 rounded-lg hover:bg-slate-300"
+                  onClick={() => {
+                    setShowPhotoPasswordModal(false);
+                    setPhotoPasswordInput('');
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
                 {tempPhotoPreview && (
                   <button 
                     onClick={savePhoto}

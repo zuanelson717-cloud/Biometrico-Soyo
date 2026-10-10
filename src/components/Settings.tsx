@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import bgImage from '../../src/assets/images/empresário-verificando-o-tempo-olhando-relógio-de-pulso-parado-no-aeroporto-panorama-viagem-negócios-negro-com-mala-verificar-185816105.webp';
 import nelsonImage from '../../src/assets/nelson_zua.jpg';
 import { useLanguage } from '../context/LanguageContext';
@@ -12,21 +12,44 @@ interface Employee {
 
 export default function Settings() {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [emails, setEmails] = useState<string[]>([]);
+  const [newEmail, setNewEmail] = useState('');
+  const [smtpConfig, setSmtpConfig] = useState({ senderEmail: '', host: '', port: 587, user: '', password: '' });
   const { language, setLanguage, t } = useLanguage();
   const [selectedEmployeeToDelete, setSelectedEmployeeToDelete] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchEmployees = async () => {
+    const fetchData = async () => {
+      // Fetch employees
       const querySnapshot = await getDocs(collection(db, 'employees'));
       const employeesList = querySnapshot.docs.map(doc => ({
         id: doc.id,
         name: doc.data().name
       })) as Employee[];
       setEmployees(employeesList);
+
+      // Fetch emails and SMTP config
+      const [emailDoc, smtpDoc] = await Promise.all([
+          getDoc(doc(db, 'config', 'emailSettings')),
+          getDoc(doc(db, 'config', 'smtpSettings'))
+      ]);
+      if (emailDoc.exists()) {
+        setEmails(emailDoc.data().emails || []);
+      }
+      if (smtpDoc.exists()) {
+          setSmtpConfig(smtpDoc.data() as any);
+      }
     };
-    fetchEmployees();
+    fetchData();
   }, []);
+
+  const saveEmails = async (updatedEmails: string[]) => {
+    await setDoc(doc(db, 'config', 'emailSettings'), { emails: updatedEmails });
+    setEmails(updatedEmails);
+    setSuccessMessage('Lista de e-mails atualizada!');
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -72,6 +95,59 @@ export default function Settings() {
           <p className="text-gray-600 mt-2">{t('version')}</p>
           <p className="text-gray-600 mt-2">{t('creator')}</p>
           <img src={nelsonImage} alt="Nelson Zua" className="w-32 h-32 rounded-full object-cover mt-4" />
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold">Configurações do SMTP</h2>
+          <div className="space-y-2 mt-2">
+            <input type="email" placeholder="Endereço do remetente" value={smtpConfig.senderEmail} onChange={(e) => setSmtpConfig({...smtpConfig, senderEmail: e.target.value})} className="w-full border rounded px-3 py-2" />
+            <input type="text" placeholder="Host do servidor SMTP" value={smtpConfig.host} onChange={(e) => setSmtpConfig({...smtpConfig, host: e.target.value})} className="w-full border rounded px-3 py-2" />
+            <input type="number" placeholder="Porta do servidor SMTP" value={smtpConfig.port} onChange={(e) => setSmtpConfig({...smtpConfig, port: Number(e.target.value)})} className="w-full border rounded px-3 py-2" />
+            <input type="text" placeholder="Nome de usuário" value={smtpConfig.user} onChange={(e) => setSmtpConfig({...smtpConfig, user: e.target.value})} className="w-full border rounded px-3 py-2" />
+            <input type="password" placeholder="Senha" value={smtpConfig.password} onChange={(e) => setSmtpConfig({...smtpConfig, password: e.target.value})} className="w-full border rounded px-3 py-2" />
+            <button 
+                onClick={async () => {
+                    await setDoc(doc(db, 'config', 'smtpSettings'), smtpConfig);
+                    setSuccessMessage('Configurações SMTP salvas!');
+                    setTimeout(() => setSuccessMessage(null), 3000);
+                }}
+                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+                Salvar SMTP
+            </button>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold">E-mails de Destino</h2>
+          <div className="flex gap-2 mt-2">
+              <input 
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="border rounded px-3 py-2 flex-grow"
+                  placeholder="Novo e-mail"
+              />
+              <button 
+                  onClick={() => {
+                      if (newEmail && !emails.includes(newEmail)) {
+                          saveEmails([...emails, newEmail]);
+                          setNewEmail('');
+                      }
+                  }}
+                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+              >
+                  Adicionar
+              </button>
+          </div>
+          <ul className="mt-2 space-y-1">
+              {emails.map(email => (
+                  <li key={email} className="flex justify-between items-center bg-gray-100 px-3 py-1 rounded">
+                      {email}
+                      <button onClick={() => saveEmails(emails.filter(e => e !== email))} className="text-red-500 text-sm">Remover</button>
+                  </li>
+              ))}
+          </ul>
         </section>
 
         <section>

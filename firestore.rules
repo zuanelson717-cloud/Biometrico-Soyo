@@ -10,6 +10,12 @@ service cloud.firestore {
     match /justifications/{justificationId} {
       allow read, write: if true;
     }
+    match /reportSchedules/{scheduleId} {
+      allow read, write: if true;
+    }
+    match /config/{document=**} {
+      allow read, write: if true;
+    }
     match /dropbox_config/{document=**} {
       allow read, write: if true;
     }
