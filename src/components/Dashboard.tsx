@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { db } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import logoImage from '../assets/nelson_zua.jpg';
@@ -43,18 +44,28 @@ export default function Dashboard() {
       >
       </div>
 
-      <div className="relative z-10 flex flex-col h-full gap-4">
+      <div className="relative z-10 h-full gap-4 md:max-w-4xl md:mx-auto">
         <div className="flex items-center gap-3">
           <img src={logoImage} alt="Logo Teleservice" className="h-12 w-auto" />
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">{t('welcome')}</h1>
-            <p className="text-slate-500 text-sm">{t('description')}</p>
+          <div className="space-y-1">
+            <h1 className="text-3xl font-extrabold text-slate-900">{t('welcome')}</h1>
+            <p className="text-slate-600 text-lg font-medium">{t('description')}</p>
           </div>
         </div>
         
         <h2 className="text-lg font-bold text-slate-800">{t('controlPanel')}</h2>
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="overflow-hidden w-full bg-slate-900/40 text-cyan-300 py-2 rounded-lg my-2 border border-slate-700/50">
+          <motion.div
+            className="whitespace-nowrap font-black text-lg tracking-widest uppercase"
+            initial={{ x: "100%" }}
+            animate={{ x: "-100%" }}
+            transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+          >
+            Seja pontual, chegar cedo é um ato de disciplina no trabalho.
+          </motion.div>
+        </div>
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {/* Card Presentes */}
             <div className="group bg-white/90 p-4 rounded-xl border border-slate-100 shadow-sm">
               <div className="text-emerald-600 text-xs font-bold uppercase mb-1 tracking-wider">{t('presentNow')}</div>
@@ -78,7 +89,7 @@ export default function Dashboard() {
             </div>
         </div>
         
-        <div className="w-full">
+        <div className="w-full mt-8">
             <DigitalNeonClock />
         </div>
       </div>
